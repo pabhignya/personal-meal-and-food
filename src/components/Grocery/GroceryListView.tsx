@@ -17,6 +17,7 @@ import {
   X
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { QuantityUnitInput } from '../Common/QuantityUnitInput';
 
 export const GroceryListView: React.FC = () => {
   const {
@@ -37,7 +38,8 @@ export const GroceryListView: React.FC = () => {
 
   // Add item form fields
   const [itemName, setItemName] = useState('');
-  const [itemQuantity, setItemQuantity] = useState('');
+  const [itemAmount, setItemAmount] = useState('1');
+  const [itemUnit, setItemUnit] = useState('pcs');
   const [itemStore, setItemStore] = useState<StoreType>(
     activeStoreFilter === 'all' ? 'indian' : activeStoreFilter
   );
@@ -88,16 +90,18 @@ export const GroceryListView: React.FC = () => {
     e.preventDefault();
     if (!itemName.trim()) return;
 
+    const formattedQty = `${itemAmount.trim() || '1'} ${itemUnit}`.trim();
+
     addGroceryItem({
       name: itemName.trim(),
-      quantity: itemQuantity.trim() || '1 pack',
+      quantity: formattedQty,
       store: itemStore,
       department: itemDept,
       notes: itemNotes.trim() || undefined
     });
 
     setItemName('');
-    setItemQuantity('');
+    setItemAmount('1');
     setItemNotes('');
     setIsAddItemOpen(false);
   };
@@ -435,30 +439,27 @@ export const GroceryListView: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Quantity</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 2 lbs, 1 tub, 3 packs"
-                    value={itemQuantity}
-                    onChange={(e) => setItemQuantity(e.target.value)}
-                    className="w-full text-xs sm:text-sm px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Store Category</label>
-                  <select
-                    value={itemStore}
-                    onChange={(e) => setItemStore(e.target.value as StoreType)}
-                    className="w-full text-xs sm:text-sm px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  >
-                    <option value="indian">🇮🇳 Indian Grocery</option>
-                    <option value="costco">🔴 Costco Wholesale</option>
-                    <option value="american">🇺🇸 American Grocery</option>
-                    <option value="other">🌐 General / Other</option>
-                  </select>
-                </div>
+              <QuantityUnitInput
+                amount={itemAmount}
+                unit={itemUnit}
+                onAmountChange={setItemAmount}
+                onUnitChange={setItemUnit}
+                label="Quantity & Measurement (pcs, weight, box, spoons, etc.)"
+                amountPlaceholder="e.g. 2"
+              />
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Store Category</label>
+                <select
+                  value={itemStore}
+                  onChange={(e) => setItemStore(e.target.value as StoreType)}
+                  className="w-full text-xs sm:text-sm px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="indian">🇮🇳 Indian Grocery</option>
+                  <option value="costco">🔴 Costco Wholesale</option>
+                  <option value="american">🇺🇸 American Grocery</option>
+                  <option value="other">🌐 General / Other</option>
+                </select>
               </div>
 
               <div>

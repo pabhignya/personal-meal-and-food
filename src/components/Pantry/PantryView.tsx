@@ -14,6 +14,7 @@ import {
   Filter,
   X
 } from 'lucide-react';
+import { QuantityUnitInput } from '../Common/QuantityUnitInput';
 
 export const PantryView: React.FC = () => {
   const { pantry, addPantryItem, updatePantryStatus, removePantryItem, sendPantryItemToGrocery } = useApp();
@@ -26,7 +27,8 @@ export const PantryView: React.FC = () => {
 
   // Form state
   const [name, setName] = useState('');
-  const [quantity, setQuantity] = useState('');
+  const [pantryAmount, setPantryAmount] = useState('1');
+  const [pantryUnit, setPantryUnit] = useState('pack');
   const [store, setStore] = useState<StoreType>('indian');
   const [dept, setDept] = useState<DepartmentType>('Pantry & Bulk');
   const [status, setStatus] = useState<'in_stock' | 'low' | 'out'>('in_stock');
@@ -48,16 +50,18 @@ export const PantryView: React.FC = () => {
     e.preventDefault();
     if (!name.trim()) return;
 
+    const formattedQty = `${pantryAmount.trim() || '1'} ${pantryUnit}`.trim();
+
     addPantryItem({
       name: name.trim(),
-      quantity: quantity.trim() || '1 item',
+      quantity: formattedQty,
       store,
       department: dept,
       status
     });
 
     setName('');
-    setQuantity('');
+    setPantryAmount('1');
     setIsAddOpen(false);
   };
 
@@ -288,30 +292,27 @@ export const PantryView: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Quantity / Stock</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 1 jar, 5 lbs, 2 bottles"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    className="w-full text-xs sm:text-sm px-3 py-2 rounded-xl border border-slate-300"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Where do you buy it?</label>
-                  <select
-                    value={store}
-                    onChange={(e) => setStore(e.target.value as StoreType)}
-                    className="w-full text-xs sm:text-sm px-3 py-2 rounded-xl border border-slate-300"
-                  >
-                    <option value="indian">Indian Store</option>
-                    <option value="costco">Costco</option>
-                    <option value="american">American Store</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
+              <QuantityUnitInput
+                amount={pantryAmount}
+                unit={pantryUnit}
+                onAmountChange={setPantryAmount}
+                onUnitChange={setPantryUnit}
+                label="Quantity & Measurement (weight, pieces, box, jars, etc.)"
+                amountPlaceholder="e.g. 1"
+              />
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Where do you buy it?</label>
+                <select
+                  value={store}
+                  onChange={(e) => setStore(e.target.value as StoreType)}
+                  className="w-full text-xs sm:text-sm px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="indian">🇮🇳 Indian Store</option>
+                  <option value="costco">🔴 Costco</option>
+                  <option value="american">🇺🇸 American Store</option>
+                  <option value="other">🌐 Other</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-2.5">

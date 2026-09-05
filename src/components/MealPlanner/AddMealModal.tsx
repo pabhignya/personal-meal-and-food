@@ -3,6 +3,7 @@ import { MealType, Recipe, StoreType, DepartmentType } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { STORE_METADATA } from '../../data/defaultData';
 import { X, Plus, Search, Sparkles, ChefHat, Check } from 'lucide-react';
+import { QuantityUnitInput } from '../Common/QuantityUnitInput';
 
 interface AddMealModalProps {
   isOpen: boolean;
@@ -34,7 +35,8 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
   const [fats, setFats] = useState('15');
   const [fiber, setFiber] = useState('5');
   const [customIngredientName, setCustomIngredientName] = useState('');
-  const [customIngredientQty, setCustomIngredientQty] = useState('');
+  const [customIngAmount, setCustomIngAmount] = useState('1');
+  const [customIngUnit, setCustomIngUnit] = useState('pcs');
   const [customIngredientStore, setCustomIngredientStore] = useState<StoreType>('indian');
   const [customIngredientsList, setCustomIngredientsList] = useState<Array<{
     id: string;
@@ -56,18 +58,19 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
 
   const handleAddCustomIngredient = () => {
     if (!customIngredientName.trim()) return;
+    const formattedQty = `${customIngAmount.trim() || '1'} ${customIngUnit}`.trim();
     setCustomIngredientsList(prev => [
       ...prev,
       {
         id: 'cing-' + Date.now(),
         name: customIngredientName.trim(),
-        quantity: customIngredientQty.trim() || '1 item',
+        quantity: formattedQty,
         store: customIngredientStore,
         department: 'Other'
       }
     ]);
     setCustomIngredientName('');
-    setCustomIngredientQty('');
+    setCustomIngAmount('1');
   };
 
   const handleRemoveCustomIngredient = (id: string) => {
@@ -367,38 +370,45 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Optional: Add Groceries for this meal
                 </label>
-                <div className="flex flex-wrap gap-2">
-                  <input
-                    type="text"
-                    placeholder="Ingredient name"
-                    value={customIngredientName}
-                    onChange={(e) => setCustomIngredientName(e.target.value)}
-                    className="flex-1 min-w-[120px] text-xs px-2.5 py-1.5 rounded-lg border border-slate-300"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Qty (e.g. 1 bunch)"
-                    value={customIngredientQty}
-                    onChange={(e) => setCustomIngredientQty(e.target.value)}
-                    className="w-24 text-xs px-2.5 py-1.5 rounded-lg border border-slate-300"
-                  />
-                  <select
-                    value={customIngredientStore}
-                    onChange={(e) => setCustomIngredientStore(e.target.value as StoreType)}
-                    className="text-xs px-2 py-1.5 rounded-lg border border-slate-300"
-                  >
-                    <option value="indian">Indian Store</option>
-                    <option value="costco">Costco</option>
-                    <option value="american">American Store</option>
-                    <option value="other">Other</option>
-                  </select>
-                  <button
-                    type="button"
-                    onClick={handleAddCustomIngredient}
-                    className="px-3 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-semibold hover:bg-slate-900"
-                  >
-                    Add
-                  </button>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      type="text"
+                      placeholder="Ingredient name (e.g. Paneer, Rice)"
+                      value={customIngredientName}
+                      onChange={(e) => setCustomIngredientName(e.target.value)}
+                      className="flex-1 min-w-[140px] text-xs px-2.5 py-1.5 rounded-lg border border-slate-300"
+                    />
+                    <select
+                      value={customIngredientStore}
+                      onChange={(e) => setCustomIngredientStore(e.target.value as StoreType)}
+                      className="text-xs px-2 py-1.5 rounded-lg border border-slate-300"
+                    >
+                      <option value="indian">🇮🇳 Indian Store</option>
+                      <option value="costco">🔴 Costco</option>
+                      <option value="american">🇺🇸 American Store</option>
+                      <option value="other">🌐 Other</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <QuantityUnitInput
+                        amount={customIngAmount}
+                        unit={customIngUnit}
+                        onAmountChange={setCustomIngAmount}
+                        onUnitChange={setCustomIngUnit}
+                        label=""
+                        amountPlaceholder="Qty (e.g. 2)"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddCustomIngredient}
+                      className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-semibold hover:bg-slate-900 self-end"
+                    >
+                      Add
+                    </button>
+                  </div>
                 </div>
 
                 {customIngredientsList.length > 0 && (

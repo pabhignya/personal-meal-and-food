@@ -16,6 +16,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { QuantityUnitInput } from '../Common/QuantityUnitInput';
 
 export const RecipeBookView: React.FC = () => {
   const { recipes, addRecipe, deleteRecipe, addMealPlan, addMissingIngredientsToGrocery, selectedDate, setActiveTab } = useApp();
@@ -43,7 +44,8 @@ export const RecipeBookView: React.FC = () => {
 
   // Temp ingredient inputs
   const [ingName, setIngName] = useState('');
-  const [ingQty, setIngQty] = useState('');
+  const [ingAmount, setIngAmount] = useState('1');
+  const [ingUnit, setIngUnit] = useState('pcs');
   const [ingStore, setIngStore] = useState<StoreType>('indian');
   const [ingDept, setIngDept] = useState<DepartmentType>('Produce');
 
@@ -80,18 +82,19 @@ export const RecipeBookView: React.FC = () => {
 
   const handleAddIngredientToNewRecipe = () => {
     if (!ingName.trim()) return;
+    const formattedQty = `${ingAmount.trim() || '1'} ${ingUnit}`.trim();
     setIngredients(prev => [
       ...prev,
       {
         id: 'ing-' + Date.now(),
         name: ingName.trim(),
-        quantity: ingQty.trim() || '1 item',
+        quantity: formattedQty,
         store: ingStore,
         department: ingDept
       }
     ]);
     setIngName('');
-    setIngQty('');
+    setIngAmount('1');
   };
 
   const handleCreateRecipeSubmit = (e: React.FormEvent) => {
@@ -540,38 +543,46 @@ export const RecipeBookView: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Ingredients & Store Assignment ({ingredients.length})
                 </label>
-                <div className="flex flex-wrap gap-2">
-                  <input
-                    type="text"
-                    placeholder="Ingredient (e.g. Paneer)"
-                    value={ingName}
-                    onChange={(e) => setIngName(e.target.value)}
-                    className="flex-1 min-w-[120px] text-xs px-2.5 py-1.5 rounded-lg border border-slate-300"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Qty (e.g. 250g)"
-                    value={ingQty}
-                    onChange={(e) => setIngQty(e.target.value)}
-                    className="w-24 text-xs px-2.5 py-1.5 rounded-lg border border-slate-300"
-                  />
-                  <select
-                    value={ingStore}
-                    onChange={(e) => setIngStore(e.target.value as StoreType)}
-                    className="text-xs px-2 py-1.5 rounded-lg border border-slate-300"
-                  >
-                    <option value="indian">Indian Store</option>
-                    <option value="costco">Costco</option>
-                    <option value="american">American Store</option>
-                    <option value="other">Other</option>
-                  </select>
-                  <button
-                    type="button"
-                    onClick={handleAddIngredientToNewRecipe}
-                    className="px-3 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-semibold"
-                  >
-                    Add
-                  </button>
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    <input
+                      type="text"
+                      placeholder="Ingredient (e.g. Paneer, Rice, Garam Masala)"
+                      value={ingName}
+                      onChange={(e) => setIngName(e.target.value)}
+                      className="flex-1 min-w-[140px] text-xs px-2.5 py-1.5 rounded-lg border border-slate-300"
+                    />
+                    <select
+                      value={ingStore}
+                      onChange={(e) => setIngStore(e.target.value as StoreType)}
+                      className="text-xs px-2 py-1.5 rounded-lg border border-slate-300"
+                    >
+                      <option value="indian">🇮🇳 Indian Store</option>
+                      <option value="costco">🔴 Costco</option>
+                      <option value="american">🇺🇸 American Store</option>
+                      <option value="other">🌐 Other</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <QuantityUnitInput
+                        amount={ingAmount}
+                        unit={ingUnit}
+                        onAmountChange={setIngAmount}
+                        onUnitChange={setIngUnit}
+                        label=""
+                        amountPlaceholder="Qty (e.g. 2)"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddIngredientToNewRecipe}
+                      className="px-4 py-2 bg-slate-800 text-white rounded-xl text-xs font-semibold hover:bg-slate-900 self-end"
+                    >
+                      Add Ingredient
+                    </button>
+                  </div>
                 </div>
 
                 {ingredients.length > 0 && (
