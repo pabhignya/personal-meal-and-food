@@ -40,6 +40,7 @@ import {
   isFirebaseConfigured
 } from '../services/firebase';
 import type { User } from 'firebase/auth';
+import { isIngredientExcluded } from '../utils/ingredientMatcher';
 
 interface AppContextType extends AppState {
   activeTab: string;
@@ -48,6 +49,9 @@ interface AppContextType extends AppState {
   setSelectedDate: (date: string) => void;
   activeStoreFilter: StoreType | 'all';
   setActiveStoreFilter: (store: StoreType | 'all') => void;
+
+  // Hydration & Storage State
+  isHydrated: boolean;
 
   // Cloud Sync & Auth
   currentUser: User | null;
@@ -68,6 +72,7 @@ interface AppContextType extends AppState {
   
   // Meal Planning
   addMealPlan: (plan: Omit<MealPlanItem, 'id' | 'isCooked'>) => void;
+  updateMealPlan: (plan: MealPlanItem) => void;
   removeMealPlan: (id: string) => void;
   markMealCooked: (
     planId: string,
@@ -125,13 +130,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedDate, setSelectedDate] = useState<string>(getInitialDateString());
   const [activeStoreFilter, setActiveStoreFilter] = useState<StoreType | 'all'>('all');
 
+  // Helper to merge saved recipes without destroying user recipes or custom recipe edits
+  const mergeRecipesNonDestructive = (savedRecipes: Recipe[] | undefined, defaultRecipes: Recipe[]): Recipe[] => {
+    if (!savedRecipes || !Array.isArray(savedRecipes) || savedRecipes.length === 0) {
+      return defaultRecipes;
+    }
+    const savedIds = new Set(savedRecipes.map(r => r.id));
+    const newDefaults = defaultRecipes.filter(dr => !savedIds.has(dr.id));
+    return [...savedRecipes, ...newDefaults];
+  };
+
+  // Hydration state gate
+  const [isHydrated, setIsHydrated] = useState<boolean>(false);
+
   // Load state from synchronous storage cache (or initialize with robust defaults)
   const [state, setState] = useState<AppState>(() => {
     try {
       const parsed = loadInitialStateSync();
       if (parsed) {
         return {
-          recipes: (parsed.recipes && parsed.recipes.length > 0) ? parsed.recipes : INITIAL_RECIPES,
+          recipes: mergeRecipesNonDestructive(parsed.recipes, INITIAL_RECIPES),
           mealPlans: parsed.mealPlans || [],
           groceries: parsed.groceries || INITIAL_GROCERIES,
           pantry: parsed.pantry || INITIAL_PANTRY,
@@ -204,46 +222,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Background hydration from IndexedDB on initial mount
   // Restores full uncompressed documents (PDFs, images) and ensures complete data integrity
   useEffect(() => {
-    loadFullPersistedState().then(persisted => {
-      if (persisted && typeof persisted === 'object') {
-        setState(current => {
-          const persistedReports = (persisted.bloodReports && persisted.bloodReports.length > 0)
-            ? persisted.bloodReports.filter((r: any) => r.id !== 'report-demo-1')
-            : [];
-          const currentReports = current.bloodReports || [];
-          const persistedIds = new Set(persistedReports.map((r: any) => r.id));
-          // Preserve any report created during boot before hydration returned
-          const onlyInCurrent = currentReports.filter(cr => !persistedIds.has(cr.id));
+    loadFullPersistedState()
+      .then(persisted => {
+        if (persisted && typeof persisted === 'object') {
+          setState(current => {
+            const persistedReports = (persisted.bloodReports && persisted.bloodReports.length > 0)
+              ? persisted.bloodReports.filter((r: any) => r.id !== 'report-demo-1')
+              : [];
+            const currentReports = current.bloodReports || [];
+            const persistedIds = new Set(persistedReports.map((r: any) => r.id));
+            // Preserve any report created during boot before hydration returned
+            const onlyInCurrent = currentReports.filter(cr => !persistedIds.has(cr.id));
 
-          const mergedReports = [
-            ...onlyInCurrent,
-            ...persistedReports.map((pr: BloodReport) => {
-              const existing = currentReports.find(cr => cr.id === pr.id);
-              const validExistingFile = existing?.fileData && existing.fileData !== '[STORED_IN_INDEXEDDB]' && existing.fileData.length > 50;
-              const validPersistedFile = pr.fileData && pr.fileData !== '[STORED_IN_INDEXEDDB]' && pr.fileData.length > 50;
-              return {
-                ...pr,
-                ...(existing || {}),
-                fileData: validPersistedFile ? pr.fileData : (validExistingFile ? existing!.fileData : (pr.fileData || '')),
-              };
-            })
-          ];
+            const mergedReports = [
+              ...onlyInCurrent,
+              ...persistedReports.map((pr: BloodReport) => {
+                const existing = currentReports.find(cr => cr.id === pr.id);
+                const validExistingFile = existing?.fileData && existing.fileData !== '[STORED_IN_INDEXEDDB]' && existing.fileData.length > 50;
+                const validPersistedFile = pr.fileData && pr.fileData !== '[STORED_IN_INDEXEDDB]' && pr.fileData.length > 50;
+                return {
+                  ...pr,
+                  ...(existing || {}),
+                  fileData: validPersistedFile ? pr.fileData : (validExistingFile ? existing!.fileData : (pr.fileData || '')),
+                };
+              })
+            ];
 
-          return {
-            ...current,
-            recipes: (persisted.recipes && persisted.recipes.length > 0) ? persisted.recipes : current.recipes,
-            mealPlans: (persisted.mealPlans && persisted.mealPlans.length > 0) ? persisted.mealPlans : current.mealPlans,
-            groceries: (persisted.groceries && persisted.groceries.length > 0) ? persisted.groceries : current.groceries,
-            pantry: (persisted.pantry && persisted.pantry.length > 0) ? persisted.pantry : current.pantry,
-            nutritionLogs: (persisted.nutritionLogs && persisted.nutritionLogs.length > 0) ? persisted.nutritionLogs : current.nutritionLogs,
-            dailyRecords: { ...current.dailyRecords, ...(persisted.dailyRecords || {}) },
-            userProfile: { ...current.userProfile, ...(persisted.userProfile || {}) },
-            bloodReports: mergedReports.length > 0 ? mergedReports : current.bloodReports,
-            weightHistory: (persisted.weightHistory && persisted.weightHistory.length > 0) ? persisted.weightHistory : current.weightHistory,
-          };
-        });
-      }
-    });
+            return {
+              ...current,
+              recipes: mergeRecipesNonDestructive(persisted.recipes, INITIAL_RECIPES),
+              mealPlans: (persisted.mealPlans && persisted.mealPlans.length > 0) ? persisted.mealPlans : current.mealPlans,
+              groceries: (persisted.groceries && persisted.groceries.length > 0) ? persisted.groceries : current.groceries,
+              pantry: (persisted.pantry && persisted.pantry.length > 0) ? persisted.pantry : current.pantry,
+              nutritionLogs: (persisted.nutritionLogs && persisted.nutritionLogs.length > 0) ? persisted.nutritionLogs : current.nutritionLogs,
+              dailyRecords: { ...current.dailyRecords, ...(persisted.dailyRecords || {}) },
+              userProfile: { ...DEFAULT_USER_PROFILE, ...current.userProfile, ...(persisted.userProfile || {}) },
+              bloodReports: mergedReports.length > 0 ? mergedReports : current.bloodReports,
+              weightHistory: (persisted.weightHistory && persisted.weightHistory.length > 0) ? persisted.weightHistory : current.weightHistory,
+            };
+          });
+        }
+        setIsHydrated(true);
+      })
+      .catch(err => {
+        console.error('Error hydrating from storage:', err);
+        setIsHydrated(true);
+      });
   }, []);
 
   // Auth & Cloud Sync State
@@ -254,6 +278,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Save to both IndexedDB and safe localStorage on every state update
   useEffect(() => {
+    if (!isHydrated) return; // Prevent overwriting stored user data before hydration completes!
+
     persistAppState(state);
 
     if (currentUser) {
@@ -269,7 +295,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       return () => clearTimeout(timer);
     }
-  }, [state, currentUser]);
+  }, [state, currentUser, isHydrated]);
 
   // Listen to Firebase Auth state
   useEffect(() => {
@@ -284,14 +310,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (cloudData && typeof cloudData === 'object' && Object.keys(cloudData).length > 0) {
             setState((prev) => ({
               ...prev,
-              recipes: (cloudData.recipes && cloudData.recipes.length > 0) ? cloudData.recipes : prev.recipes,
+              recipes: mergeRecipesNonDestructive(cloudData.recipes, prev.recipes),
               mealPlans: cloudData.mealPlans || prev.mealPlans,
               groceries: cloudData.groceries || prev.groceries,
               pantry: cloudData.pantry || prev.pantry,
               nutritionLogs: cloudData.nutritionLogs || prev.nutritionLogs,
               dailyRecords: { ...prev.dailyRecords, ...(cloudData.dailyRecords || {}) },
               dailyGoals: cloudData.dailyGoals || prev.dailyGoals,
-              userProfile: { ...prev.userProfile, ...(cloudData.userProfile || {}) },
+              userProfile: { ...DEFAULT_USER_PROFILE, ...prev.userProfile, ...(cloudData.userProfile || {}) },
               bloodReports: mergeBloodReportsWithLocal(cloudData.bloodReports, prev.bloodReports),
               weightHistory: (cloudData.weightHistory && cloudData.weightHistory.length > 0) ? cloudData.weightHistory : prev.weightHistory,
             }));
@@ -323,14 +349,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (cloudData && typeof cloudData === 'object') {
         setState((prev) => ({
           ...prev,
-          recipes: (cloudData.recipes && cloudData.recipes.length > 0) ? cloudData.recipes : prev.recipes,
+          recipes: mergeRecipesNonDestructive(cloudData.recipes, prev.recipes),
           mealPlans: cloudData.mealPlans || prev.mealPlans,
           groceries: cloudData.groceries || prev.groceries,
           pantry: cloudData.pantry || prev.pantry,
           nutritionLogs: cloudData.nutritionLogs || prev.nutritionLogs,
           dailyRecords: { ...prev.dailyRecords, ...(cloudData.dailyRecords || {}) },
           dailyGoals: cloudData.dailyGoals || prev.dailyGoals,
-          userProfile: { ...prev.userProfile, ...(cloudData.userProfile || {}) },
+          userProfile: { ...DEFAULT_USER_PROFILE, ...prev.userProfile, ...(cloudData.userProfile || {}) },
           bloodReports: mergeBloodReportsWithLocal(cloudData.bloodReports, prev.bloodReports),
           weightHistory: (cloudData.weightHistory && cloudData.weightHistory.length > 0) ? cloudData.weightHistory : prev.weightHistory,
         }));
@@ -366,10 +392,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // --- Meal Planning Handlers ---
   const addMealPlan = (planData: Omit<MealPlanItem, 'id' | 'isCooked'>) => {
     const newPlanId = 'plan-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+
+    // Automatically incorporate global profile exclusions
+    const userExclusions = state.userProfile?.excludedVeggies || [];
+    const allExcludedIds = new Set<string>(planData.excludedIngredientIds || []);
+    if (planData.ingredients) {
+      planData.ingredients.forEach(ing => {
+        if (isIngredientExcluded(ing.name, userExclusions)) {
+          allExcludedIds.add(ing.id);
+        }
+      });
+    }
+
     const newPlan: MealPlanItem = {
       ...planData,
       id: newPlanId,
-      isCooked: false
+      isCooked: false,
+      excludedIngredientIds: Array.from(allExcludedIds)
     };
 
     // Automatically check recipe ingredients against Pantry and push missing to grocery list!
@@ -377,7 +416,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const missingIngredients: RecipeIngredient[] = [];
 
     const effectiveIngredients = (!newPlan.isLeftover && newPlan.ingredients && newPlan.ingredients.length > 0)
-      ? newPlan.ingredients.filter(ing => !(newPlan.excludedIngredientIds || []).includes(ing.id))
+      ? newPlan.ingredients.filter(ing => 
+          !allExcludedIds.has(ing.id) && !isIngredientExcluded(ing.name, userExclusions)
+        )
       : [];
 
     if (effectiveIngredients.length > 0) {
@@ -418,6 +459,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev,
       mealPlans: [...prev.mealPlans, newPlan],
       groceries: updatedGroceries
+    }));
+  };
+
+  const updateMealPlan = (plan: MealPlanItem) => {
+    setState(prev => ({
+      ...prev,
+      mealPlans: prev.mealPlans.map(p => p.id === plan.id ? plan : p)
     }));
   };
 
@@ -520,8 +568,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Optionally deduct pantry items for the cooked batch (if not already a leftover)
     let updatedPantry = [...state.pantry];
     if (deductPantry && !meal.isLeftover && meal.ingredients) {
+      const userExclusions = state.userProfile?.excludedVeggies || [];
       const activeIngredients = meal.ingredients.filter(
-        ing => !(meal.excludedIngredientIds || []).includes(ing.id)
+        ing => !(meal.excludedIngredientIds || []).includes(ing.id) && !isIngredientExcluded(ing.name, userExclusions)
       );
       activeIngredients.forEach(ing => {
         const pIndex = updatedPantry.findIndex(p => 
@@ -652,8 +701,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let count = 0;
     const todayStr = getInitialDateString();
     let updatedGroceries = [...state.groceries];
+    const userExclusions = state.userProfile?.excludedVeggies || [];
 
     ingredients.forEach(ing => {
+      // Do not add if excluded by user profile
+      if (isIngredientExcluded(ing.name, userExclusions)) {
+        return;
+      }
+
       // Check if already in list
       const exists = updatedGroceries.some(g => !g.isBought && g.name.toLowerCase() === ing.name.toLowerCase() && g.store === ing.store);
       if (!exists) {
@@ -976,6 +1031,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activeStoreFilter,
         setActiveStoreFilter,
         addMealPlan,
+        updateMealPlan,
         removeMealPlan,
         markMealCooked,
         unmarkMealCooked,
@@ -1006,6 +1062,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         exportDataJSON,
         importDataJSON,
         resetToDefaults,
+
+        // Hydration & Storage State
+        isHydrated,
 
         // Cloud Sync & Auth
         currentUser,

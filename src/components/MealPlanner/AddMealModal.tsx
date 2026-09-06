@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MealType, Recipe, StoreType, DepartmentType } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { STORE_METADATA } from '../../data/defaultData';
-import { X, Plus, Search, Sparkles, ChefHat, Check } from 'lucide-react';
+import { X, Plus, Search, Sparkles, ChefHat, Check, Save } from 'lucide-react';
 import { QuantityUnitInput } from '../Common/QuantityUnitInput';
+import { isIngredientExcluded } from '../../utils/ingredientMatcher';
 
 interface AddMealModalProps {
   isOpen: boolean;
@@ -18,7 +19,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
   defaultDate,
   defaultMealType = 'lunch'
 }) => {
-  const { recipes, addMealPlan, userProfile } = useApp();
+  const { recipes, addMealPlan, userProfile, updateRecipe } = useApp();
 
   const [mode, setMode] = useState<'recipe' | 'custom'>('recipe');
   const [date, setDate] = useState(defaultDate);
@@ -28,6 +29,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
   const [recipeCategoryFilter, setRecipeCategoryFilter] = useState<'all' | 'meal' | 'snack' | 'dessert'>('all');
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>(recipes[0]?.id || '');
   const [excludedIngredientIds, setExcludedIngredientIds] = useState<string[]>([]);
+  const [savedRecipeFeedback, setSavedRecipeFeedback] = useState<string | null>(null);
 
   // Custom meal fields
   const [customTitle, setCustomTitle] = useState('');
@@ -66,22 +68,38 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
 
   const selectedRecipe = recipes.find(r => r.id === selectedRecipeId);
 
+  const computeExclusionsForRecipe = (r: Recipe | undefined, userExclusions: string[] = []): string[] => {
+    if (!r) return [];
+    const set = new Set<string>(r.defaultExcludedIngredientIds || []);
+    r.ingredients.forEach(ing => {
+      if (isIngredientExcluded(ing.name, userExclusions)) {
+        set.add(ing.id);
+      }
+    });
+    return Array.from(set);
+  };
+
+  useEffect(() => {
+    if (isOpen && selectedRecipe) {
+      setExcludedIngredientIds(computeExclusionsForRecipe(selectedRecipe, userProfile?.excludedVeggies || []));
+    }
+  }, [isOpen, selectedRecipeId, userProfile?.excludedVeggies]);
+
   const handleSelectRecipe = (r: Recipe) => {
     setSelectedRecipeId(r.id);
     if (r.category === 'snack') setMealType('snack');
     else if (r.category === 'dessert') setMealType('dessert');
+    setExcludedIngredientIds(computeExclusionsForRecipe(r, userProfile?.excludedVeggies || []));
+  };
 
-    // Auto-exclude ingredients matching user's global excluded veggies
-    const userExclusions = userProfile?.excludedVeggies || [];
-    const autoEx: string[] = [];
-    r.ingredients.forEach(ing => {
-      const match = userExclusions.some(ev => {
-        const clean = ev.toLowerCase().split('(')[0].trim();
-        return ing.name.toLowerCase().includes(clean) || clean.includes(ing.name.toLowerCase());
-      });
-      if (match) autoEx.push(ing.id);
+  const handleSaveRecipeDefaultExclusions = () => {
+    if (!selectedRecipe) return;
+    updateRecipe({
+      ...selectedRecipe,
+      defaultExcludedIngredientIds: excludedIngredientIds
     });
-    setExcludedIngredientIds(autoEx);
+    setSavedRecipeFeedback(`Saved default exclusions for "${selectedRecipe.title}"!`);
+    setTimeout(() => setSavedRecipeFeedback(null), 3000);
   };
 
   const toggleIngredientExcluded = (ingId: string) => {
@@ -370,7 +388,7 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <button
                         type="button"
                         onClick={handleToggleAllProduce}
@@ -380,11 +398,29 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                           ? 'Restore Veggies'
                           : 'Exclude Veggies'}
                       </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSaveRecipeDefaultExclusions}
+                        className="text-[11px] px-2 py-0.5 rounded-md bg-white border border-amber-300 hover:bg-amber-50 text-amber-900 font-bold flex items-center gap-1 shadow-2xs"
+                        title="Persist these exclusions for this recipe in your recipe book"
+                      >
+                        <Save className="w-3 h-3 text-amber-600" />
+                        <span>Save for Recipe</span>
+                      </button>
+
                       <span className="text-xs text-emerald-700 font-black">
                         Total: {selectedRecipe.nutritionPerServing.calories * servings} kcal
                       </span>
                     </div>
                   </div>
+
+                  {savedRecipeFeedback && (
+                    <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-semibold animate-fadeIn flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>{savedRecipeFeedback}</span>
+                    </div>
+                  )}
 
                   <p className="text-[11px] text-slate-500">
                     Click to exclude any veggies or items (excluded items will not be added to groceries or deducted from pantry):

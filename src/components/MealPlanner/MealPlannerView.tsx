@@ -16,7 +16,8 @@ import {
   Clock,
   Sparkles,
   RotateCcw,
-  Check
+  Check,
+  Edit2
 } from 'lucide-react';
 
 export const MealPlannerView: React.FC = () => {
@@ -25,6 +26,7 @@ export const MealPlannerView: React.FC = () => {
     selectedDate,
     setSelectedDate,
     removeMealPlan,
+    updateMealPlan,
     unmarkMealCooked,
     addMissingIngredientsToGrocery,
     dailyGoals,
@@ -36,6 +38,7 @@ export const MealPlannerView: React.FC = () => {
   const [activeMealTypeForAdd, setActiveMealTypeForAdd] = useState<MealType>('lunch');
   const [selectedMealForCooking, setSelectedMealForCooking] = useState<MealPlanItem | null>(null);
   const [feedbackBanner, setFeedbackBanner] = useState<string | null>(null);
+  const [editingMealExclusionsId, setEditingMealExclusionsId] = useState<string | null>(null);
 
   // Helper to generate 7 days around selected date or current week
   const getWeekDates = (centerDateStr: string) => {
@@ -373,43 +376,118 @@ export const MealPlannerView: React.FC = () => {
 
                             {/* Ingredients with Store Tags and Exclusions */}
                             {!meal.isLeftover && meal.ingredients && meal.ingredients.length > 0 && (
-                              <div className="mt-2.5 space-y-1">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-[11px] text-slate-400 font-medium">Ingredients:</span>
-                                  {meal.ingredients
-                                    .filter(i => !(meal.excludedIngredientIds || []).includes(i.id))
-                                    .slice(0, 4)
-                                    .map(ing => {
-                                      const storeMeta = STORE_METADATA[ing.store];
-                                      return (
-                                        <span
-                                          key={ing.id}
-                                          className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${storeMeta.badgeClass}`}
-                                        >
-                                          {ing.name}
-                                        </span>
-                                      );
-                                    })}
-                                  {meal.ingredients.filter(i => !(meal.excludedIngredientIds || []).includes(i.id)).length > 4 && (
-                                    <span className="text-[10px] text-slate-400 font-medium">
-                                      +{meal.ingredients.filter(i => !(meal.excludedIngredientIds || []).includes(i.id)).length - 4} more
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* Excluded Veggies / Ingredients Callout */}
-                                {(meal.excludedIngredientIds && meal.excludedIngredientIds.length > 0) && (
-                                  <div className="flex items-center gap-1 flex-wrap pt-0.5">
-                                    <span className="text-[10px] text-rose-700 font-bold bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md flex items-center gap-1">
-                                      <span>🚫</span>
-                                      <span>Omitted: {
-                                        meal.ingredients
-                                          .filter(i => meal.excludedIngredientIds?.includes(i.id))
-                                          .map(i => i.name)
-                                          .join(', ') || `${meal.excludedIngredientIds.length} ingredients`
-                                      }</span>
-                                    </span>
+                              <div className="mt-2.5 space-y-1.5">
+                                {editingMealExclusionsId === meal.id ? (
+                                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 animate-fadeIn">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                                        <span>🥦</span>
+                                        <span>Toggle Veggie & Item Exclusions:</span>
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingMealExclusionsId(null)}
+                                        className="text-[11px] font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 px-2 py-0.5 rounded-md transition-colors"
+                                      >
+                                        Done
+                                      </button>
+                                    </div>
+                                    <p className="text-[11px] text-slate-500">
+                                      Tap items to include or exclude from this meal (and groceries):
+                                    </p>
+                                    <div className="flex flex-wrap gap-1.5 pt-1 max-h-36 overflow-y-auto">
+                                      {meal.ingredients.map(ing => {
+                                        const isExcluded = (meal.excludedIngredientIds || []).includes(ing.id);
+                                        const isProduce = ing.department === 'Produce';
+                                        return (
+                                          <button
+                                            key={ing.id}
+                                            type="button"
+                                            onClick={() => {
+                                              const currentEx = meal.excludedIngredientIds || [];
+                                              const newEx = isExcluded
+                                                ? currentEx.filter(id => id !== ing.id)
+                                                : [...currentEx, ing.id];
+                                              updateMealPlan({
+                                                ...meal,
+                                                excludedIngredientIds: newEx
+                                              });
+                                            }}
+                                            className={`px-2 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition-all ${
+                                              isExcluded
+                                                ? 'bg-rose-50 text-rose-800 border-rose-300 line-through opacity-75'
+                                                : 'bg-white text-slate-800 border-slate-200 hover:border-slate-300'
+                                            }`}
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={!isExcluded}
+                                              onChange={() => {}}
+                                              className="w-3 h-3 text-emerald-600 rounded cursor-pointer pointer-events-none"
+                                            />
+                                            <span>{ing.name} ({ing.quantity})</span>
+                                            {isProduce && <span className="text-[10px]">🥬</span>}
+                                            {isExcluded && <span className="text-[9px] font-bold text-rose-600">Omitted</span>}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
                                   </div>
+                                ) : (
+                                  <>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-[11px] text-slate-400 font-medium">Ingredients:</span>
+                                      {meal.ingredients
+                                        .filter(i => !(meal.excludedIngredientIds || []).includes(i.id))
+                                        .slice(0, 4)
+                                        .map(ing => {
+                                          const storeMeta = STORE_METADATA[ing.store];
+                                          return (
+                                            <span
+                                              key={ing.id}
+                                              className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${storeMeta.badgeClass}`}
+                                            >
+                                              {ing.name}
+                                            </span>
+                                          );
+                                        })}
+                                      {meal.ingredients.filter(i => !(meal.excludedIngredientIds || []).includes(i.id)).length > 4 && (
+                                        <span className="text-[10px] text-slate-400 font-medium">
+                                          +{meal.ingredients.filter(i => !(meal.excludedIngredientIds || []).includes(i.id)).length - 4} more
+                                        </span>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingMealExclusionsId(meal.id)}
+                                        className="text-[10px] text-slate-500 hover:text-emerald-700 font-semibold inline-flex items-center gap-0.5 ml-1 transition-colors"
+                                        title="Edit excluded veggies for this planned meal"
+                                      >
+                                        <Edit2 className="w-2.5 h-2.5" />
+                                        <span>Edit Exclusions</span>
+                                      </button>
+                                    </div>
+
+                                    {/* Excluded Veggies / Ingredients Callout */}
+                                    {(meal.excludedIngredientIds && meal.excludedIngredientIds.length > 0) && (
+                                      <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditingMealExclusionsId(meal.id)}
+                                          className="text-[10px] text-rose-700 font-bold bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-0.5 rounded-md flex items-center gap-1 text-left transition-colors cursor-pointer"
+                                          title="Click to view and edit omitted ingredients"
+                                        >
+                                          <span>🚫</span>
+                                          <span>Omitted: {
+                                            meal.ingredients
+                                              .filter(i => meal.excludedIngredientIds?.includes(i.id))
+                                              .map(i => i.name)
+                                              .join(', ') || `${meal.excludedIngredientIds.length} ingredients`
+                                          }</span>
+                                          <span className="underline ml-0.5 text-[9px] text-rose-600 font-normal">(change)</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                  </>
                                 )}
                               </div>
                             )}

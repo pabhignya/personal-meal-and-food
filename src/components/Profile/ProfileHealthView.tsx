@@ -15,6 +15,7 @@ import {
   generateRecommendedGoals,
   STANDARD_BIOMARKER_TEMPLATES
 } from '../../utils/healthCalculator';
+import { isIngredientExcluded } from '../../utils/ingredientMatcher';
 import {
   User,
   HeartPulse,
@@ -80,6 +81,7 @@ export const ProfileHealthView: React.FC = () => {
   const [weightDateInput, setWeightDateInput] = useState<string>(new Date().toISOString().split('T')[0]);
   const [weightNotesInput, setWeightNotesInput] = useState<string>('');
   const [isWeightModalOpen, setIsWeightModalOpen] = useState<boolean>(false);
+  const [customExclusionInput, setCustomExclusionInput] = useState<string>('');
 
   // Sync profileForm whenever userProfile changes from context (e.g. IndexedDB hydration)
   useEffect(() => {
@@ -203,10 +205,31 @@ export const ProfileHealthView: React.FC = () => {
     };
     setProfileForm(nextProfile);
     updateUserProfile(nextProfile);
+    triggerSuccess(exists ? `Restored "${veggie}" to meal planning` : `Excluded "${veggie}" from all meal plans!`);
+  };
+
+  // Add custom excluded ingredient / item
+  const handleAddCustomExclusion = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = customExclusionInput.trim();
+    if (!trimmed) return;
+
+    const current = profileForm.excludedVeggies || [];
+    if (!current.some(v => v.toLowerCase() === trimmed.toLowerCase())) {
+      const nextVeggies = [...current, trimmed];
+      const nextProfile = { ...profileForm, excludedVeggies: nextVeggies };
+      setProfileForm(nextProfile);
+      updateUserProfile(nextProfile);
+      triggerSuccess(`Added "${trimmed}" to excluded items list!`);
+    } else {
+      triggerSuccess(`"${trimmed}" is already in your excluded list.`);
+    }
+    setCustomExclusionInput('');
   };
 
   // Remove vegetable exclusion by index and auto-persist
   const handleRemoveVeggieIndex = (idx: number) => {
+    const removedItem = (profileForm.excludedVeggies || [])[idx];
     const nextVeggies = (profileForm.excludedVeggies || []).filter((_, i) => i !== idx);
     const nextProfile = {
       ...profileForm,
@@ -214,6 +237,9 @@ export const ProfileHealthView: React.FC = () => {
     };
     setProfileForm(nextProfile);
     updateUserProfile(nextProfile);
+    if (removedItem) {
+      triggerSuccess(`Removed "${removedItem}" from excluded list.`);
+    }
   };
 
   // Toggle meal planner snacks slot and auto-persist
@@ -992,46 +1018,73 @@ export const ProfileHealthView: React.FC = () => {
                   </div>
 
                   {/* Common Veggie Exclusion Quick Toggles */}
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      'Bitter Gourd (Karela)',
-                      'Eggplant (Baingan)',
-                      'Mushrooms',
-                      'Bell Peppers / Capsicum',
-                      'Okra (Bhindi)',
-                      'Spinach (Palak)',
-                      'Cauliflower (Gobi)',
-                      'Bottle Gourd (Lauki)',
-                      'Radish (Mooli)'
-                    ].map(veggie => {
-                      const isExcluded = (profileForm.excludedVeggies || []).some(
-                        v => v.toLowerCase() === veggie.toLowerCase() || veggie.toLowerCase().includes(v.toLowerCase())
-                      );
-                      return (
-                        <button
-                          key={veggie}
-                          type="button"
-                          onClick={() => handleToggleVeggie(veggie)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${
-                            isExcluded
-                              ? 'bg-rose-50 text-rose-800 border-rose-300 shadow-xs'
-                              : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200'
-                          }`}
-                        >
-                          <span>{isExcluded ? '🚫' : '🥬'}</span>
-                          <span>{veggie}</span>
-                          {isExcluded && <span className="text-[10px] font-bold text-rose-600">Excluded</span>}
-                        </button>
-                      );
-                    })}
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-500 uppercase block mb-1.5">
+                      Quick Veggie Presets:
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        'Bitter Gourd (Karela)',
+                        'Eggplant (Baingan)',
+                        'Mushrooms',
+                        'Bell Peppers / Capsicum',
+                        'Okra (Bhindi)',
+                        'Spinach (Palak)',
+                        'Cauliflower (Gobi)',
+                        'Bottle Gourd (Lauki)',
+                        'Radish (Mooli)'
+                      ].map(veggie => {
+                        const isExcluded = isIngredientExcluded(veggie, profileForm.excludedVeggies || []);
+                        return (
+                          <button
+                            key={veggie}
+                            type="button"
+                            onClick={() => handleToggleVeggie(veggie)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${
+                              isExcluded
+                                ? 'bg-rose-50 text-rose-800 border-rose-300 shadow-xs'
+                                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200'
+                            }`}
+                          >
+                            <span>{isExcluded ? '🚫' : '🥬'}</span>
+                            <span>{veggie}</span>
+                            {isExcluded && <span className="text-[10px] font-bold text-rose-600">Excluded</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
+
+                  {/* Custom Veggie / Ingredient Input */}
+                  <form onSubmit={handleAddCustomExclusion} className="flex gap-2 items-center pt-1">
+                    <input
+                      type="text"
+                      value={customExclusionInput}
+                      onChange={e => setCustomExclusionInput(e.target.value)}
+                      placeholder="Type any custom ingredient to exclude (e.g. Cilantro, Onions, Garlic, Peanuts)..."
+                      className="flex-1 px-3.5 py-2 text-xs rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-rose-500 bg-white shadow-xs"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!customExclusionInput.trim()}
+                      className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors shadow-xs flex items-center gap-1 shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Exclusion</span>
+                    </button>
+                  </form>
 
                   {/* Currently Excluded Veggies Tags */}
                   {(profileForm.excludedVeggies && profileForm.excludedVeggies.length > 0) && (
-                    <div className="p-3 bg-rose-50/50 rounded-xl border border-rose-200">
-                      <span className="text-[11px] font-bold text-rose-800 uppercase block mb-1.5">
-                        Active Veggie Exclusions ({profileForm.excludedVeggies.length}):
-                      </span>
+                    <div className="p-3.5 bg-rose-50/60 rounded-2xl border border-rose-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-bold text-rose-800 uppercase block">
+                          Active Exclusions ({profileForm.excludedVeggies.length}):
+                        </span>
+                        <span className="text-[10px] text-rose-600 font-medium">
+                          Omitted from shopping & meal planner
+                        </span>
+                      </div>
                       <div className="flex flex-wrap gap-1.5">
                         {profileForm.excludedVeggies.map((veg, idx) => (
                           <span
@@ -1042,7 +1095,7 @@ export const ProfileHealthView: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleRemoveVeggieIndex(idx)}
-                              className="text-slate-400 hover:text-rose-600 ml-1 text-sm font-bold"
+                              className="text-slate-400 hover:text-rose-600 ml-1 text-sm font-bold leading-none p-0.5"
                               title="Remove exclusion"
                             >
                               ×

@@ -17,11 +17,13 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { QuantityUnitInput } from '../Common/QuantityUnitInput';
+import { isIngredientExcluded } from '../../utils/ingredientMatcher';
 
 export const RecipeBookView: React.FC = () => {
   const {
     recipes,
     addRecipe,
+    updateRecipe,
     deleteRecipe,
     addMealPlan,
     addMissingIngredientsToGrocery,
@@ -77,17 +79,14 @@ export const RecipeBookView: React.FC = () => {
     return matchesCuisine && matchesCategory && matchesSearch;
   });
 
-  // Open recipe details modal and pre-exclude any veggies that match user's global exclusions
+  // Open recipe details modal and pre-exclude any veggies that match user's global exclusions or recipe defaults
   const handleOpenRecipeModal = (recipe: Recipe) => {
     const userExclusions = userProfile?.excludedVeggies || [];
-    const autoExcludedIds: string[] = [];
+    const defaultEx = recipe.defaultExcludedIngredientIds || [];
+    const autoExcludedIds: string[] = [...defaultEx];
 
     recipe.ingredients.forEach(ing => {
-      const isExcluded = userExclusions.some(ev => {
-        const cleanEv = ev.toLowerCase().split('(')[0].trim();
-        return ing.name.toLowerCase().includes(cleanEv) || cleanEv.includes(ing.name.toLowerCase());
-      });
-      if (isExcluded) {
+      if (!autoExcludedIds.includes(ing.id) && isIngredientExcluded(ing.name, userExclusions)) {
         autoExcludedIds.push(ing.id);
       }
     });
@@ -113,6 +112,24 @@ export const RecipeBookView: React.FC = () => {
     } else {
       setModalExcludedIngIds(prev => Array.from(new Set([...prev, ...produceIds])));
     }
+  };
+
+  // Persist the current exclusions to the recipe document
+  const handleSaveRecipeDefaultExclusions = () => {
+    if (!activeRecipeModal) return;
+    const updated: Recipe = {
+      ...activeRecipeModal,
+      defaultExcludedIngredientIds: modalExcludedIngIds
+    };
+    updateRecipe(updated);
+    setActiveRecipeModal(updated);
+    const count = modalExcludedIngIds.length;
+    setToastMessage(
+      count > 0
+        ? `Saved ${count} default exclusion${count > 1 ? 's' : ''} for "${updated.title}"!`
+        : `Cleared default exclusions for "${updated.title}"!`
+    );
+    setTimeout(() => setToastMessage(null), 3500);
   };
 
   const handlePlanWithExclusions = (recipe: Recipe) => {
@@ -154,18 +171,16 @@ export const RecipeBookView: React.FC = () => {
 
   const handleAddRecipeToGroceries = (recipe: Recipe) => {
     const userExclusions = userProfile?.excludedVeggies || [];
+    const defaultEx = recipe.defaultExcludedIngredientIds || [];
     const activeIngredients = recipe.ingredients.filter(ing => {
-      const isExcluded = userExclusions.some(ev => {
-        const cleanEv = ev.toLowerCase().split('(')[0].trim();
-        return ing.name.toLowerCase().includes(cleanEv) || cleanEv.includes(ing.name.toLowerCase());
-      });
-      return !isExcluded;
+      if (defaultEx.includes(ing.id)) return false;
+      return !isIngredientExcluded(ing.name, userExclusions);
     });
     const count = addMissingIngredientsToGrocery(activeIngredients, recipe.title);
     const omittedCount = recipe.ingredients.length - activeIngredients.length;
     setToastMessage(
       `Added ${count} items from "${recipe.title}" to your grocery list` +
-      (omittedCount > 0 ? ` (${omittedCount} excluded veggies omitted)` : '') +
+      (omittedCount > 0 ? ` (${omittedCount} excluded items omitted)` : '') +
       `!`
     );
     setTimeout(() => setToastMessage(null), 4000);
@@ -325,10 +340,12 @@ export const RecipeBookView: React.FC = () => {
           const storeKey = recipe.cuisine === 'indian' ? 'indian' : recipe.cuisine === 'costco-prep' ? 'costco' : 'american';
           const storeMeta = STORE_METADATA[storeKey];
 
-          const matchingExcluded = (userProfile?.excludedVeggies || []).filter(ev => {
-            const cleanEv = ev.toLowerCase().split('(')[0].trim();
-            return recipe.ingredients.some(i => i.name.toLowerCase().includes(cleanEv));
+          const userExclusions = userProfile?.excludedVeggies || [];
+          const defaultEx = recipe.defaultExcludedIngredientIds || [];
+          const matchingExcluded = userExclusions.filter(ev => {
+            return recipe.ingredients.some(i => isIngredientExcluded(i.name, [ev]));
           });
+          const hasSavedExclusions = defaultEx.length > 0;
 
           const categoryBadge = recipe.category === 'snack' 
             ? { label: 'Snack', class: 'bg-amber-100 text-amber-800 border-amber-300' }
@@ -378,7 +395,13 @@ export const RecipeBookView: React.FC = () => {
                 {matchingExcluded.length > 0 && (
                   <div className="mt-2 text-[11px] px-2.5 py-1 bg-rose-50 text-rose-800 rounded-lg border border-rose-200 flex items-center gap-1.5 font-medium">
                     <span>🥦</span>
-                    <span>Contains <strong>{matchingExcluded.join(', ')}</strong> (can exclude in details)</span>
+                    <span>Contains <strong>{matchingExcluded.join(', ')}</strong> (omitted)</span>
+                  </div>
+                )}
+                {hasSavedExclusions && (
+                  <div className="mt-1 text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md border border-indigo-200 flex items-center gap-1 font-semibold">
+                    <span>💾</span>
+                    <span>{defaultEx.length} recipe exclusion{defaultEx.length > 1 ? 's' : ''} saved</span>
                   </div>
                 )}
 
@@ -499,7 +522,7 @@ export const RecipeBookView: React.FC = () => {
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap justify-end">
                     <button
                       type="button"
                       onClick={handleToggleAllProduce}
@@ -508,6 +531,14 @@ export const RecipeBookView: React.FC = () => {
                       {activeRecipeModal.ingredients.filter(i => i.department === 'Produce').every(i => modalExcludedIngIds.includes(i.id))
                         ? 'Restore Veggies'
                         : 'Exclude Veggies'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveRecipeDefaultExclusions}
+                      className="text-[11px] px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-800 font-bold border border-indigo-200 flex items-center gap-1 transition-colors"
+                      title="Save these exclusions as permanent defaults for this dish"
+                    >
+                      <span>💾 Save for Recipe</span>
                     </button>
                     <button
                       type="button"
@@ -542,7 +573,7 @@ export const RecipeBookView: React.FC = () => {
                             type="checkbox"
                             checked={!isExcluded}
                             onChange={() => {}} // handled by parent div click
-                            className="w-4 h-4 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                            className="w-4 h-4 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500 cursor-pointer pointer-events-none"
                           />
                           <div>
                             <span className={`font-bold ${isExcluded ? 'line-through text-rose-800/60' : 'text-slate-800'}`}>
