@@ -28,6 +28,15 @@ export interface FirebaseConfig {
   appId: string;
 }
 
+const DEFAULT_FIREBASE_CONFIG: FirebaseConfig = {
+  apiKey: "AIzaSyBNHjktvvDr2wXDLtDAgtrhbcqgYSrTE7M",
+  authDomain: "mealcraft-app-b3ec5.firebaseapp.com",
+  projectId: "mealcraft-app-b3ec5",
+  storageBucket: "mealcraft-app-b3ec5.firebasestorage.app",
+  messagingSenderId: "827519890324",
+  appId: "1:827519890324:web:d089b75cb48267f7021581",
+};
+
 const FIREBASE_CONFIG_STORAGE_KEY = 'mealcraft_firebase_custom_config';
 
 // Load stored config or environment config
@@ -47,12 +56,12 @@ export function getFirebaseConfig(): FirebaseConfig {
   }
 
   return {
-    apiKey: (import.meta as any).env?.VITE_FIREBASE_API_KEY || '',
-    authDomain: (import.meta as any).env?.VITE_FIREBASE_AUTH_DOMAIN || 'mealcraft-app-b3ec5.firebaseapp.com',
-    projectId: (import.meta as any).env?.VITE_FIREBASE_PROJECT_ID || 'mealcraft-app-b3ec5',
-    storageBucket: (import.meta as any).env?.VITE_FIREBASE_STORAGE_BUCKET || 'mealcraft-app-b3ec5.firebasestorage.app',
-    messagingSenderId: (import.meta as any).env?.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-    appId: (import.meta as any).env?.VITE_FIREBASE_APP_ID || '',
+    apiKey: (import.meta as any).env?.VITE_FIREBASE_API_KEY || DEFAULT_FIREBASE_CONFIG.apiKey,
+    authDomain: (import.meta as any).env?.VITE_FIREBASE_AUTH_DOMAIN || DEFAULT_FIREBASE_CONFIG.authDomain,
+    projectId: (import.meta as any).env?.VITE_FIREBASE_PROJECT_ID || DEFAULT_FIREBASE_CONFIG.projectId,
+    storageBucket: (import.meta as any).env?.VITE_FIREBASE_STORAGE_BUCKET || DEFAULT_FIREBASE_CONFIG.storageBucket,
+    messagingSenderId: (import.meta as any).env?.VITE_FIREBASE_MESSAGING_SENDER_ID || DEFAULT_FIREBASE_CONFIG.messagingSenderId,
+    appId: (import.meta as any).env?.VITE_FIREBASE_APP_ID || DEFAULT_FIREBASE_CONFIG.appId,
   };
 }
 
