@@ -60,7 +60,7 @@ interface AppContextType extends AppState {
   // Profile, Health & Biomarkers
   updateUserProfile: (profile: Partial<UserProfile>) => void;
   applyRecommendedGoalsToDailyGoals: () => void;
-  addBloodReport: (report: Omit<BloodReport, 'id'>) => void;
+  addBloodReport: (report: Omit<BloodReport, 'id'> & { id?: string }) => string;
   updateBloodReport: (report: BloodReport) => void;
   removeBloodReport: (id: string) => void;
   logWeight: (weight: number, date?: string, notes?: string) => void;
@@ -162,18 +162,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   });
 
+  // Helper to merge cloud blood reports with local state so heavy local attachments are NEVER wiped
+  const mergeBloodReportsWithLocal = (cloudReports: BloodReport[] | undefined, localReports: BloodReport[]): BloodReport[] => {
+    if (!cloudReports || !Array.isArray(cloudReports)) return localReports;
+
+    const cloudIds = new Set(cloudReports.map(r => r.id));
+    // Keep recent local reports (< 60s) not yet committed to cloud
+    const pendingLocal = localReports.filter(lr => {
+      if (cloudIds.has(lr.id)) return false;
+      if (lr.id.startsWith('report-')) {
+        const timePart = parseInt(lr.id.split('-')[1] || '0', 10);
+        if (!isNaN(timePart) && Date.now() - timePart < 60000) {
+          return true;
+        }
+      }
+      return false;
+    });
+
+    const mergedCloud = cloudReports.map(cr => {
+      const localMatch = localReports.find(lr => lr.id === cr.id);
+      const localFile = localMatch?.fileData;
+      const hasValidLocalFile = Boolean(localFile && localFile.length > 50 && localFile !== '[STORED_IN_INDEXEDDB]');
+
+      return {
+        ...cr,
+        labName: cr.labName || localMatch?.labName || '',
+        notes: cr.notes || localMatch?.notes || '',
+        fileName: cr.fileName || localMatch?.fileName || '',
+        fileType: cr.fileType || localMatch?.fileType || '',
+        fileData: hasValidLocalFile ? (localFile as string) : (cr.fileData || ''),
+        hasAttachment: cr.hasAttachment || Boolean(hasValidLocalFile || cr.fileData),
+        biomarkers: cr.biomarkers || localMatch?.biomarkers || [],
+        recommendedFoods: cr.recommendedFoods || localMatch?.recommendedFoods || [],
+        foodsToLimit: cr.foodsToLimit || localMatch?.foodsToLimit || [],
+      };
+    });
+
+    return [...pendingLocal, ...mergedCloud];
+  };
+
   // Background hydration from IndexedDB on initial mount
   // Restores full uncompressed documents (PDFs, images) and ensures complete data integrity
   useEffect(() => {
     loadFullPersistedState().then(persisted => {
       if (persisted && typeof persisted === 'object') {
         setState(current => {
-          const mergedReports = (persisted.bloodReports && persisted.bloodReports.length > 0)
-            ? persisted.bloodReports.filter((r: any) => r.id !== 'report-demo-1').map(pr => {
-                const existing = current.bloodReports.find(cr => cr.id === pr.id);
-                return existing ? { ...existing, fileData: pr.fileData || existing.fileData } : pr;
-              })
-            : current.bloodReports;
+          const persistedReports = (persisted.bloodReports && persisted.bloodReports.length > 0)
+            ? persisted.bloodReports.filter((r: any) => r.id !== 'report-demo-1')
+            : [];
+          const currentReports = current.bloodReports || [];
+          const persistedIds = new Set(persistedReports.map((r: any) => r.id));
+          // Preserve any report created during boot before hydration returned
+          const onlyInCurrent = currentReports.filter(cr => !persistedIds.has(cr.id));
+
+          const mergedReports = [
+            ...onlyInCurrent,
+            ...persistedReports.map((pr: BloodReport) => {
+              const existing = currentReports.find(cr => cr.id === pr.id);
+              const validExistingFile = existing?.fileData && existing.fileData !== '[STORED_IN_INDEXEDDB]' && existing.fileData.length > 50;
+              const validPersistedFile = pr.fileData && pr.fileData !== '[STORED_IN_INDEXEDDB]' && pr.fileData.length > 50;
+              return {
+                ...pr,
+                ...(existing || {}),
+                fileData: validPersistedFile ? pr.fileData : (validExistingFile ? existing!.fileData : (pr.fileData || '')),
+              };
+            })
+          ];
 
           return {
             ...current,
@@ -184,7 +238,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             nutritionLogs: (persisted.nutritionLogs && persisted.nutritionLogs.length > 0) ? persisted.nutritionLogs : current.nutritionLogs,
             dailyRecords: { ...current.dailyRecords, ...(persisted.dailyRecords || {}) },
             userProfile: { ...current.userProfile, ...(persisted.userProfile || {}) },
-            bloodReports: mergedReports,
+            bloodReports: mergedReports.length > 0 ? mergedReports : current.bloodReports,
             weightHistory: (persisted.weightHistory && persisted.weightHistory.length > 0) ? persisted.weightHistory : current.weightHistory,
           };
         });
@@ -238,7 +292,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               dailyRecords: { ...prev.dailyRecords, ...(cloudData.dailyRecords || {}) },
               dailyGoals: cloudData.dailyGoals || prev.dailyGoals,
               userProfile: { ...prev.userProfile, ...(cloudData.userProfile || {}) },
-              bloodReports: cloudData.bloodReports || prev.bloodReports,
+              bloodReports: mergeBloodReportsWithLocal(cloudData.bloodReports, prev.bloodReports),
               weightHistory: (cloudData.weightHistory && cloudData.weightHistory.length > 0) ? cloudData.weightHistory : prev.weightHistory,
             }));
             setSyncStatus('synced');
@@ -277,7 +331,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           dailyRecords: { ...prev.dailyRecords, ...(cloudData.dailyRecords || {}) },
           dailyGoals: cloudData.dailyGoals || prev.dailyGoals,
           userProfile: { ...prev.userProfile, ...(cloudData.userProfile || {}) },
-          bloodReports: cloudData.bloodReports || prev.bloodReports,
+          bloodReports: mergeBloodReportsWithLocal(cloudData.bloodReports, prev.bloodReports),
           weightHistory: (cloudData.weightHistory && cloudData.weightHistory.length > 0) ? cloudData.weightHistory : prev.weightHistory,
         }));
         setSyncStatus('synced');
@@ -298,6 +352,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setState((prev) => ({
           ...prev,
           ...cloudData,
+          bloodReports: mergeBloodReportsWithLocal(cloudData.bloodReports, prev.bloodReports),
         }));
       }
       setSyncStatus('synced');
@@ -764,21 +819,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const addBloodReport = (reportData: Omit<BloodReport, 'id'>) => {
+  const addBloodReport = (reportData: Omit<BloodReport, 'id'> & { id?: string }): string => {
+    const newId = reportData.id || ('report-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6));
     const newReport: BloodReport = {
       ...reportData,
-      id: 'report-' + Date.now()
+      id: newId,
+      labName: reportData.labName || '',
+      notes: reportData.notes || '',
+      fileName: reportData.fileName || '',
+      fileData: reportData.fileData || '',
+      fileType: reportData.fileType || '',
+      hasAttachment: Boolean(reportData.fileData && reportData.fileData.length > 0),
+      biomarkers: reportData.biomarkers || [],
+      overallSummary: reportData.overallSummary || '',
+      recommendedFoods: reportData.recommendedFoods || [],
+      foodsToLimit: reportData.foodsToLimit || [],
     };
     setState(prev => ({
       ...prev,
-      bloodReports: [newReport, ...prev.bloodReports]
+      bloodReports: [newReport, ...prev.bloodReports.filter(r => r.id !== newId)]
     }));
+    return newId;
   };
 
   const updateBloodReport = (report: BloodReport) => {
     setState(prev => ({
       ...prev,
-      bloodReports: prev.bloodReports.map(r => r.id === report.id ? report : r)
+      bloodReports: prev.bloodReports.map(r => r.id === report.id ? {
+        ...r,
+        ...report,
+        hasAttachment: Boolean(report.fileData || r.fileData),
+      } : r)
     }));
   };
 

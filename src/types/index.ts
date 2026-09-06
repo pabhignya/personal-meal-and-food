@@ -160,6 +160,7 @@ export interface BloodReport {
   overallSummary?: string;
   recommendedFoods?: string[];
   foodsToLimit?: string[];
+  hasAttachment?: boolean;
 }
 
 export interface WeightEntry {

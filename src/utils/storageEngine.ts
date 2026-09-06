@@ -96,7 +96,8 @@ export function safeSaveToLocalStorage(state: AppState): boolean {
           ...state,
           bloodReports: (state.bloodReports || []).map(r => ({
             ...r,
-            fileData: r.fileData ? '[STORED_IN_INDEXEDDB]' : undefined,
+            fileData: '',
+            hasAttachment: Boolean(r.fileData && r.fileData.length > 0),
           }))
         };
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(lightweightState));
