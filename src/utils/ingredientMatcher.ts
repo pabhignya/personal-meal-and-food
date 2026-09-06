@@ -1,84 +1,263 @@
-﻿/**
- * Culinary alias mappings covering Indian, American, and Costco naming conventions.
+/**
+ * Universal Culinary Ingredient Matcher with Semantic Groups and Negative Guards.
+ * 
+ * Prevents false positives (e.g. Bell Peppers excluding Black Pepper, Eggplant excluding Eggs,
+ * Cauliflower excluding Flour, Cilantro excluding Coriander Powder, Peanuts excluding Green Peas)
+ * while correctly matching Indian, American, and Costco naming variations.
  */
-const INGREDIENT_ALIASES: Record<string, string[]> = {
-  // Peppers
-  'bell pepper': ['capsicum', 'bell peppers', 'shimla mirch', 'green pepper', 'red pepper', 'yellow pepper', 'peppers'],
-  'capsicum': ['bell pepper', 'bell peppers', 'shimla mirch', 'green pepper', 'red pepper'],
-  'shimla mirch': ['bell pepper', 'capsicum', 'bell peppers'],
-  
-  // Bitter Gourd
-  'bitter gourd': ['karela', 'bitter melon', 'bitter gourd'],
-  'karela': ['bitter gourd', 'bitter melon'],
-  
-  // Eggplant
-  'eggplant': ['baingan', 'brinjal', 'aubergine', 'vankaya', 'kathirikai'],
-  'baingan': ['eggplant', 'brinjal', 'aubergine'],
-  'brinjal': ['eggplant', 'baingan', 'aubergine'],
-  
-  // Mushrooms
-  'mushroom': ['mushrooms', 'cremini', 'portobello', 'button mushroom', 'shiitake', 'khumb'],
-  'mushrooms': ['mushroom', 'cremini', 'portobello', 'button mushroom', 'khumb'],
-  
-  // Okra
-  'okra': ['bhindi', 'ladyfinger', 'lady finger', 'lady fingers', 'gumbo', 'bhendi'],
-  'bhindi': ['okra', 'ladyfinger', 'lady finger', 'bhendi'],
-  
-  // Spinach & Greens
-  'spinach': ['palak', 'baby spinach', 'spinach leaves', 'keerai'],
-  'palak': ['spinach', 'baby spinach', 'spinach leaves'],
-  
-  // Cauliflower
-  'cauliflower': ['gobi', 'gobhi', 'phool gobi'],
-  'gobi': ['cauliflower', 'gobhi', 'phool gobi'],
-  'gobhi': ['cauliflower', 'gobi'],
-  
-  // Bottle Gourd / Squashes
-  'bottle gourd': ['lauki', 'doodhi', 'ghiya', 'sorakaya', 'sorakkai'],
-  'lauki': ['bottle gourd', 'doodhi', 'ghiya'],
-  'doodhi': ['bottle gourd', 'lauki', 'ghiya'],
-  
-  // Radish
-  'radish': ['mooli', 'muli', 'daikon', 'white radish'],
-  'mooli': ['radish', 'muli', 'daikon'],
-  
-  // Herbs & Seasonings
-  'cilantro': ['kothmir', 'coriander', 'fresh coriander', 'dhania', 'cilantro leaves'],
-  'coriander': ['cilantro', 'kothmir', 'dhania'],
-  'kothmir': ['cilantro', 'coriander'],
-  'fenugreek': ['methi', 'kasuri methi', 'fresh methi'],
-  'methi': ['fenugreek', 'kasuri methi'],
-  'mint': ['pudina', 'fresh mint'],
-  'pudina': ['mint', 'fresh mint'],
-  
-  // Alliums & Aromatics
-  'onion': ['onions', 'pyaz', 'shallot', 'shallots', 'red onion', 'yellow onion', 'spring onion'],
-  'onions': ['onion', 'pyaz', 'shallots'],
-  'pyaz': ['onion', 'onions'],
-  'garlic': ['lehsun', 'lahsun', 'garlic cloves'],
-  'ginger': ['adrak'],
-  'ginger garlic': ['ginger & garlic', 'ginger-garlic', 'adrak lehsun'],
-  
-  // Tomatoes
-  'tomato': ['tomatoes', 'tamatar'],
-  'tomatoes': ['tomato', 'tamatar'],
-  
-  // Proteins & Dairy
-  'paneer': ['cottage cheese', 'indian cottage cheese', 'paneer block'],
-  'tofu': ['bean curd', 'soy bean curd'],
-  'egg': ['eggs', 'anda'],
-  'eggs': ['egg', 'anda'],
-  
-  // Legumes & Starches
-  'potato': ['potatoes', 'aloo', 'alu', 'batata'],
-  'potatoes': ['potato', 'aloo', 'alu'],
-  'aloo': ['potato', 'potatoes'],
-  'peanut': ['peanuts', 'groundnut', 'groundnuts', 'moongphali', 'singdana'],
-  'peanuts': ['peanut', 'groundnut', 'moongphali'],
-};
+
+export interface ExclusionGroup {
+  id: string;
+  name: string;
+  triggers: string[];
+  matches: string[];
+  negatives?: string[];
+}
+
+export const CULINARY_EXCLUSION_GROUPS: ExclusionGroup[] = [
+  {
+    id: 'bell_peppers',
+    name: 'Bell Peppers / Capsicum',
+    triggers: [
+      'bell pepper',
+      'bell peppers',
+      'capsicum',
+      'capsicums',
+      'shimla mirch',
+      'sweet pepper',
+      'sweet peppers',
+      'green pepper',
+      'red pepper',
+      'yellow pepper'
+    ],
+    matches: [
+      'bell pepper',
+      'bell peppers',
+      'capsicum',
+      'capsicums',
+      'shimla mirch',
+      'green bell pepper',
+      'red bell pepper',
+      'yellow bell pepper',
+      'sweet pepper',
+      'sweet peppers',
+      'banana pepper'
+    ],
+    // Essential negative guard: NEVER match black pepper, white pepper, peppercorns, or chili powder!
+    negatives: [
+      'black pepper',
+      'white pepper',
+      'peppercorn',
+      'peppercorns',
+      'cayenne',
+      'chili pepper',
+      'chilli pepper',
+      'sichuan pepper',
+      'cracked pepper',
+      'ground pepper',
+      'pepper powder'
+    ]
+  },
+  {
+    id: 'eggplant',
+    name: 'Eggplant (Baingan)',
+    triggers: [
+      'eggplant',
+      'eggplants',
+      'baingan',
+      'brinjal',
+      'brinjals',
+      'aubergine',
+      'aubergines',
+      'vankaya',
+      'kathirikai'
+    ],
+    matches: [
+      'eggplant',
+      'eggplants',
+      'baingan',
+      'brinjal',
+      'brinjals',
+      'aubergine',
+      'aubergines',
+      'vankaya',
+      'kathirikai'
+    ],
+    // Negative guard: NEVER match regular eggs!
+    negatives: ['boiled egg', 'large eggs', 'egg whites', 'egg white']
+  },
+  {
+    id: 'bitter_gourd',
+    name: 'Bitter Gourd (Karela)',
+    triggers: ['bitter gourd', 'bitter melon', 'karela', 'karele', 'kakarakaya', 'pavakkai'],
+    matches: ['bitter gourd', 'bitter gourds', 'bitter melon', 'karela', 'karele', 'kakarakaya', 'pavakkai'],
+    negatives: []
+  },
+  {
+    id: 'mushrooms',
+    name: 'Mushrooms',
+    triggers: ['mushroom', 'mushrooms', 'cremini', 'portobello', 'shiitake', 'button mushroom', 'khumb'],
+    matches: ['mushroom', 'mushrooms', 'cremini', 'portobello', 'shiitake', 'khumb', 'oyster mushroom', 'enoki'],
+    negatives: []
+  },
+  {
+    id: 'okra',
+    name: 'Okra (Bhindi)',
+    triggers: ['okra', 'bhindi', 'bhendi', 'ladyfinger', 'lady finger', 'ladyfingers', 'lady fingers', 'vendakkai'],
+    matches: ['okra', 'bhindi', 'bhendi', 'ladyfinger', 'lady finger', 'ladyfingers', 'lady fingers', 'vendakkai'],
+    negatives: []
+  },
+  {
+    id: 'spinach',
+    name: 'Spinach (Palak)',
+    triggers: ['spinach', 'palak', 'baby spinach', 'keerai', 'spinach leaves'],
+    matches: ['spinach', 'palak', 'baby spinach', 'keerai', 'spinach leaves'],
+    negatives: []
+  },
+  {
+    id: 'cauliflower',
+    name: 'Cauliflower (Gobi)',
+    triggers: ['cauliflower', 'cauliflowers', 'phool gobi', 'phool gobhi', 'gobhi', 'gobi'],
+    matches: ['cauliflower', 'cauliflowers', 'phool gobi', 'phool gobhi', 'gobhi'],
+    // Essential negative guard: NEVER match all-purpose flour, besan flour, or cabbage!
+    negatives: [
+      'patta gobi',
+      'band gobi',
+      'cabbage',
+      'all purpose flour',
+      'wheat flour',
+      'besan flour',
+      'almond flour',
+      'corn flour',
+      'rice flour',
+      'flour'
+    ]
+  },
+  {
+    id: 'bottle_gourd',
+    name: 'Bottle Gourd (Lauki)',
+    triggers: ['bottle gourd', 'lauki', 'doodhi', 'dudhi', 'ghiya', 'sorakaya', 'sorakkai'],
+    matches: ['bottle gourd', 'lauki', 'doodhi', 'dudhi', 'ghiya', 'sorakaya', 'sorakkai'],
+    negatives: []
+  },
+  {
+    id: 'radish',
+    name: 'Radish (Mooli)',
+    triggers: ['radish', 'radishes', 'mooli', 'muli', 'daikon', 'white radish'],
+    matches: ['radish', 'radishes', 'mooli', 'muli', 'daikon', 'white radish'],
+    negatives: ['horseradish']
+  },
+  {
+    id: 'cilantro',
+    name: 'Cilantro / Fresh Coriander',
+    triggers: ['cilantro', 'kothmir', 'fresh coriander', 'coriander leaves', 'dhania patta'],
+    matches: ['cilantro', 'kothmir', 'fresh coriander', 'coriander leaves', 'dhania patta'],
+    // Essential negative guard: DO NOT exclude coriander powder / dhania powder spice!
+    negatives: [
+      'coriander powder',
+      'ground coriander',
+      'coriander seed',
+      'coriander seeds',
+      'dhania powder',
+      'dhaniya powder'
+    ]
+  },
+  {
+    id: 'onion',
+    name: 'Onions (Pyaz)',
+    triggers: ['onion', 'onions', 'pyaz', 'shallot', 'shallots', 'kanda'],
+    matches: [
+      'onion',
+      'onions',
+      'pyaz',
+      'shallot',
+      'shallots',
+      'kanda',
+      'red onion',
+      'yellow onion',
+      'white onion',
+      'green onion',
+      'spring onion'
+    ],
+    negatives: []
+  },
+  {
+    id: 'garlic',
+    name: 'Garlic (Lehsun)',
+    triggers: ['garlic', 'lehsun', 'lahsun', 'garlic paste', 'vellulli'],
+    matches: [
+      'garlic',
+      'lehsun',
+      'lahsun',
+      'garlic cloves',
+      'garlic clove',
+      'garlic paste',
+      'minced garlic',
+      'garlic powder',
+      'vellulli'
+    ],
+    negatives: []
+  },
+  {
+    id: 'ginger',
+    name: 'Ginger (Adrak)',
+    triggers: ['ginger', 'adrak', 'allam', 'inji'],
+    matches: ['ginger', 'adrak', 'fresh ginger', 'ginger paste', 'minced ginger', 'allam', 'inji'],
+    negatives: []
+  },
+  {
+    id: 'peanuts',
+    name: 'Peanuts / Groundnuts',
+    triggers: ['peanut', 'peanuts', 'groundnut', 'groundnuts', 'moongphali', 'singdana', 'palli'],
+    matches: ['peanut', 'peanuts', 'groundnut', 'groundnuts', 'moongphali', 'singdana', 'palli', 'peanut butter'],
+    negatives: ['green pea', 'green peas', 'split pea', 'split peas', 'pea protein']
+  },
+  {
+    id: 'peas',
+    name: 'Green Peas (Matar)',
+    triggers: ['peas', 'green peas', 'matar', 'mutter', 'vatana'],
+    matches: ['peas', 'green peas', 'matar', 'mutter', 'vatana', 'frozen peas'],
+    negatives: ['peanut', 'peanuts', 'groundnut', 'chickpea', 'chickpeas', 'black eyed pea']
+  },
+  {
+    id: 'cabbage',
+    name: 'Cabbage (Patta Gobi)',
+    triggers: ['cabbage', 'cabbages', 'patta gobi', 'band gobi', 'muttaikose'],
+    matches: ['cabbage', 'cabbages', 'patta gobi', 'band gobi', 'muttaikose'],
+    negatives: ['cauliflower', 'phool gobi']
+  },
+  {
+    id: 'potato',
+    name: 'Potatoes (Aloo)',
+    triggers: ['potato', 'potatoes', 'aloo', 'alu', 'batata', 'urulaikizhangu'],
+    matches: ['potato', 'potatoes', 'aloo', 'alu', 'batata', 'urulaikizhangu', 'baby potatoes', 'russet potato'],
+    negatives: ['sweet potato', 'sweet potatoes']
+  },
+  {
+    id: 'tomato',
+    name: 'Tomatoes (Tamatar)',
+    triggers: ['tomato', 'tomatoes', 'tamatar', 'thakkali'],
+    matches: ['tomato', 'tomatoes', 'tamatar', 'thakkali', 'roma tomato', 'cherry tomato', 'diced tomatoes'],
+    negatives: []
+  },
+  {
+    id: 'paneer',
+    name: 'Paneer (Cottage Cheese)',
+    triggers: ['paneer', 'cottage cheese', 'indian cottage cheese'],
+    matches: ['paneer', 'cottage cheese', 'indian cottage cheese', 'paneer cubes'],
+    negatives: []
+  },
+  {
+    id: 'eggs',
+    name: 'Eggs (Anda)',
+    triggers: ['egg', 'eggs', 'anda', 'ande', 'muttai'],
+    matches: ['egg', 'eggs', 'anda', 'ande', 'muttai', 'boiled egg', 'egg white', 'egg whites'],
+    negatives: ['eggplant', 'eggplants']
+  }
+];
 
 /**
- * Normalizes string for fuzzy token comparison
+ * Normalizes string for clean word-boundary comparison
  */
 export function normalizeName(str: string): string {
   if (!str) return '';
@@ -90,97 +269,107 @@ export function normalizeName(str: string): string {
 }
 
 /**
- * Extracts distinct exclusion tokens and aliases from an exclusion rule
- * e.g. "Bell Peppers / Capsicum" -> ['bell peppers', 'capsicum', 'bell pepper', 'shimla mirch', ...]
+ * Checks if target phrase exists as a whole word or contiguous phrase in text.
+ * Prevents false substring matches (e.g. "egg" in "eggplant", "flour" in "cauliflower", "pea" in "peanut").
  */
-export function extractExclusionTokens(exclusion: string): string[] {
-  if (!exclusion || !exclusion.trim()) return [];
+export function matchesWholeWordOrPhrase(text: string, phrase: string): boolean {
+  const normText = normalizeName(text);
+  const normPhrase = normalizeName(phrase);
+  if (!normText || !normPhrase) return false;
 
-  const raw = exclusion.toLowerCase();
-  // Split on slashes, commas, parentheses, semicolons, dashes
-  const rawParts = raw
-    .split(/[\/(),;\-]+/)
-    .map(p => p.trim())
-    .filter(p => p.length > 1);
+  if (normText === normPhrase) return true;
 
-  // If no delimiter was found, include the whole string
-  if (rawParts.length === 0 && raw.trim().length > 1) {
-    rawParts.push(raw.trim());
-  }
-
-  const tokenSet = new Set<string>();
-
-  rawParts.forEach(part => {
-    const norm = normalizeName(part);
-    if (!norm || norm.length < 2) return;
-
-    tokenSet.add(norm);
-
-    // Add singular/plural variants
-    if (norm.endsWith('ies')) {
-      tokenSet.add(norm.slice(0, -3) + 'y');
-    } else if (norm.endsWith('es') && norm.length > 4) {
-      tokenSet.add(norm.slice(0, -2));
-    } else if (norm.endsWith('s') && !norm.endsWith('ss') && norm.length > 3) {
-      tokenSet.add(norm.slice(0, -1));
-    } else {
-      tokenSet.add(norm + 's');
-    }
-
-    // Look up in alias map
-    for (const [key, aliases] of Object.entries(INGREDIENT_ALIASES)) {
-      if (norm === key || norm.includes(key) || key.includes(norm)) {
-        tokenSet.add(key);
-        aliases.forEach(a => {
-          tokenSet.add(a);
-          tokenSet.add(normalizeName(a));
-        });
-      }
-    }
-  });
-
-  return Array.from(tokenSet).filter(t => t.length > 1);
+  const escaped = normPhrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(^|\\s)${escaped}(\\s|$)`, 'i');
+  return regex.test(normText);
 }
 
 /**
  * Checks whether an ingredient matches any excluded term in userExclusions.
- * Handles sub-strings, word matches, and aliases.
  */
 export function isIngredientExcluded(ingredientName: string, userExclusions: string[]): boolean {
   if (!ingredientName || !userExclusions || userExclusions.length === 0) {
     return false;
   }
 
-  const normalizedIng = normalizeName(ingredientName);
-  if (!normalizedIng) return false;
+  const normIng = normalizeName(ingredientName);
+  if (!normIng) return false;
 
-  const ingWords = normalizedIng.split(' ');
+  for (const rawEx of userExclusions) {
+    if (!rawEx || !rawEx.trim()) continue;
+    const normEx = normalizeName(rawEx);
+    if (!normEx) continue;
 
-  return userExclusions.some(exclusion => {
-    if (!exclusion || !exclusion.trim()) return false;
+    // 1. Check if rawEx triggers any defined CULINARY_EXCLUSION_GROUPS
+    const activeGroups = CULINARY_EXCLUSION_GROUPS.filter(group =>
+      group.triggers.some(t => matchesWholeWordOrPhrase(normEx, t) || normEx === t)
+    );
 
-    const tokens = extractExclusionTokens(exclusion);
+    if (activeGroups.length > 0) {
+      for (const group of activeGroups) {
+        // If ingredient contains a negative keyword, it cannot match this group
+        const hasNegative = (group.negatives || []).some(neg => matchesWholeWordOrPhrase(normIng, neg));
+        if (hasNegative) continue;
 
-    return tokens.some(token => {
-      const cleanToken = normalizeName(token);
-      if (!cleanToken || cleanToken.length < 2) return false;
-
-      // 1. Direct inclusion in either direction
-      if (normalizedIng.includes(cleanToken) || cleanToken.includes(normalizedIng)) {
-        return true;
+        const isMatch = group.matches.some(m => matchesWholeWordOrPhrase(normIng, m));
+        if (isMatch) return true;
+      }
+    } else {
+      // 2. Fallback for custom user exclusions: whole word matching + singular/plural variants
+      let variants = [normEx];
+      if (normEx.endsWith('ies') && normEx.length > 3) {
+        variants.push(normEx.slice(0, -3) + 'y');
+      } else if (normEx.endsWith('es') && normEx.length > 4) {
+        variants.push(normEx.slice(0, -2));
+      } else if (normEx.endsWith('s') && !normEx.endsWith('ss') && normEx.length > 3) {
+        variants.push(normEx.slice(0, -1));
+      } else {
+        variants.push(normEx + 's');
       }
 
-      // 2. Token matches any individual word in ingredient name
-      if (ingWords.includes(cleanToken)) {
-        return true;
+      for (const v of variants) {
+        if (matchesWholeWordOrPhrase(normIng, v)) {
+          return true;
+        }
       }
+    }
+  }
 
-      // 3. Multi-word token substring match (e.g. "bell pepper" inside "costco bell pepper 6 pack")
-      if (cleanToken.includes(' ') && normalizedIng.includes(cleanToken)) {
-        return true;
-      }
+  return false;
+}
 
-      return false;
-    });
-  });
+/**
+ * Cleanly toggles an exclusion in an array.
+ * If the vegetable is currently excluded (via exact match or alias group), removes all matching items.
+ * If not currently excluded, adds it to the list.
+ */
+export function toggleExclusionInList(veggie: string, currentList: string[]): string[] {
+  const isCurrentlyExcluded = isIngredientExcluded(veggie, currentList);
+  if (isCurrentlyExcluded) {
+    return currentList.filter(v => 
+      !isIngredientExcluded(v, [veggie]) && 
+      !isIngredientExcluded(veggie, [v]) && 
+      v.toLowerCase() !== veggie.toLowerCase()
+    );
+  } else {
+    return [...currentList, veggie];
+  }
+}
+
+/**
+ * Extracts distinct tokens from an exclusion string (backwards compatibility).
+ */
+export function extractExclusionTokens(exclusion: string): string[] {
+  if (!exclusion || !exclusion.trim()) return [];
+  const rawParts = exclusion
+    .toLowerCase()
+    .split(/[\/(),;\-]+/)
+    .map(p => p.trim())
+    .filter(p => p.length > 1);
+
+  if (rawParts.length === 0 && exclusion.trim().length > 1) {
+    rawParts.push(exclusion.trim());
+  }
+
+  return rawParts.map(normalizeName).filter(Boolean);
 }

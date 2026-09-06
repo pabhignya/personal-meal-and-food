@@ -15,7 +15,7 @@ import {
   generateRecommendedGoals,
   STANDARD_BIOMARKER_TEMPLATES
 } from '../../utils/healthCalculator';
-import { isIngredientExcluded } from '../../utils/ingredientMatcher';
+import { isIngredientExcluded, toggleExclusionInList } from '../../utils/ingredientMatcher';
 import {
   User,
   HeartPulse,
@@ -195,17 +195,15 @@ export const ProfileHealthView: React.FC = () => {
   // Toggle excluded vegetable and auto-persist
   const handleToggleVeggie = (veggie: string) => {
     const current = profileForm.excludedVeggies || [];
-    const exists = current.some(v => v.toLowerCase() === veggie.toLowerCase());
-    const nextVeggies = exists
-      ? current.filter(v => v.toLowerCase() !== veggie.toLowerCase())
-      : [...current, veggie];
+    const isCurrentlyExcluded = isIngredientExcluded(veggie, current);
+    const nextVeggies = toggleExclusionInList(veggie, current);
     const nextProfile = {
       ...profileForm,
       excludedVeggies: nextVeggies,
     };
     setProfileForm(nextProfile);
     updateUserProfile(nextProfile);
-    triggerSuccess(exists ? `Restored "${veggie}" to meal planning` : `Excluded "${veggie}" from all meal plans!`);
+    triggerSuccess(isCurrentlyExcluded ? `Restored "${veggie}" to meal planning` : `Excluded "${veggie}" from all meal plans!`);
   };
 
   // Add custom excluded ingredient / item

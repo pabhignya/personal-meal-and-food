@@ -393,22 +393,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addMealPlan = (planData: Omit<MealPlanItem, 'id' | 'isCooked'>) => {
     const newPlanId = 'plan-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
 
-    // Automatically incorporate global profile exclusions
-    const userExclusions = state.userProfile?.excludedVeggies || [];
-    const allExcludedIds = new Set<string>(planData.excludedIngredientIds || []);
-    if (planData.ingredients) {
-      planData.ingredients.forEach(ing => {
-        if (isIngredientExcluded(ing.name, userExclusions)) {
-          allExcludedIds.add(ing.id);
-        }
-      });
+    // If caller explicitly provided excludedIngredientIds, use that exact list!
+    // Otherwise, auto-calculate from user's global profile exclusions.
+    let finalExcludedIds: string[];
+    if (planData.excludedIngredientIds !== undefined) {
+      finalExcludedIds = planData.excludedIngredientIds;
+    } else {
+      const userExclusions = state.userProfile?.excludedVeggies || [];
+      finalExcludedIds = [];
+      if (planData.ingredients) {
+        planData.ingredients.forEach(ing => {
+          if (isIngredientExcluded(ing.name, userExclusions)) {
+            finalExcludedIds.push(ing.id);
+          }
+        });
+      }
     }
 
     const newPlan: MealPlanItem = {
       ...planData,
       id: newPlanId,
       isCooked: false,
-      excludedIngredientIds: Array.from(allExcludedIds)
+      excludedIngredientIds: finalExcludedIds
     };
 
     // Automatically check recipe ingredients against Pantry and push missing to grocery list!
@@ -416,9 +422,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const missingIngredients: RecipeIngredient[] = [];
 
     const effectiveIngredients = (!newPlan.isLeftover && newPlan.ingredients && newPlan.ingredients.length > 0)
-      ? newPlan.ingredients.filter(ing => 
-          !allExcludedIds.has(ing.id) && !isIngredientExcluded(ing.name, userExclusions)
-        )
+      ? newPlan.ingredients.filter(ing => !finalExcludedIds.includes(ing.id))
       : [];
 
     if (effectiveIngredients.length > 0) {
@@ -701,14 +705,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let count = 0;
     const todayStr = getInitialDateString();
     let updatedGroceries = [...state.groceries];
-    const userExclusions = state.userProfile?.excludedVeggies || [];
 
     ingredients.forEach(ing => {
-      // Do not add if excluded by user profile
-      if (isIngredientExcluded(ing.name, userExclusions)) {
-        return;
-      }
-
       // Check if already in list
       const exists = updatedGroceries.some(g => !g.isBought && g.name.toLowerCase() === ing.name.toLowerCase() && g.store === ing.store);
       if (!exists) {
