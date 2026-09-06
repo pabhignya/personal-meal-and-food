@@ -1,4 +1,4 @@
-import { Recipe, PantryItem, GroceryItem, DailyGoals } from '../types';
+import { Recipe, PantryItem, GroceryItem, DailyGoals, BloodReport } from '../types';
 
 export const STORE_METADATA = {
   indian: {
@@ -52,6 +52,36 @@ export const DEFAULT_DAILY_GOALS: DailyGoals = {
   water: 2500,  // ml (10 glasses of 250ml)
 };
 
+export const DEFAULT_USER_PROFILE = {
+  name: 'Alex',
+  dateOfBirth: '1996-05-15',
+  age: 30,
+  weight: 75,
+  weightUnit: 'kg' as const,
+  height: 175,
+  heightUnit: 'cm' as const,
+  gender: 'male' as const,
+  activityLevel: 'moderate' as const,
+  goal: 'maintain' as const,
+  excludedVeggies: ['Bitter Gourd (Karela)', 'Mushrooms'],
+  includeSnacksInPlanner: true,
+  includeDessertsInPlanner: true,
+  customTargetCalories: 2000,
+  customTargetProtein: 135,
+  customTargetCarbs: 190,
+  customTargetFats: 60,
+  customTargetFiber: 30,
+  customTargetWater: 2500,
+};
+
+export const DEFAULT_BLOOD_REPORTS: BloodReport[] = [];
+
+export const DEFAULT_WEIGHT_HISTORY = [
+  { id: 'w-1', date: '2026-08-01', weight: 76.8, notes: 'Starting month baseline' },
+  { id: 'w-2', date: '2026-08-15', weight: 75.9, notes: 'Mid-month check-in' },
+  { id: 'w-3', date: '2026-09-01', weight: 75.0, notes: 'Target achieved with consistent meal prep!' },
+];
+
 export const INITIAL_RECIPES: Recipe[] = [
   {
     id: 'recipe-1',
@@ -60,6 +90,7 @@ export const INITIAL_RECIPES: Recipe[] = [
     servings: 2,
     prepTime: '30 mins',
     cuisine: 'indian',
+    category: 'meal',
     tags: ['Vegetarian', 'High Protein', 'Classic Indian'],
     imageEmoji: '🥘',
     nutritionPerServing: {
@@ -93,6 +124,7 @@ export const INITIAL_RECIPES: Recipe[] = [
     servings: 3,
     prepTime: '25 mins',
     cuisine: 'indian',
+    category: 'meal',
     tags: ['High Fiber', 'Vegetarian', 'Comfort Food'],
     imageEmoji: '🍲',
     nutritionPerServing: {
@@ -123,6 +155,7 @@ export const INITIAL_RECIPES: Recipe[] = [
     servings: 4,
     prepTime: '35 mins',
     cuisine: 'costco-prep',
+    category: 'meal',
     tags: ['High Protein', 'Low Carb', 'Meal Prep'],
     imageEmoji: '🍗',
     nutritionPerServing: {
@@ -154,6 +187,7 @@ export const INITIAL_RECIPES: Recipe[] = [
     servings: 2,
     prepTime: '20 mins',
     cuisine: 'costco-prep',
+    category: 'meal',
     tags: ['High Protein', 'Omega 3', 'Quick 20-min'],
     imageEmoji: '🐟',
     nutritionPerServing: {
@@ -184,6 +218,7 @@ export const INITIAL_RECIPES: Recipe[] = [
     servings: 1,
     prepTime: '5 mins prep (overnight)',
     cuisine: 'costco-prep',
+    category: 'meal',
     tags: ['Breakfast', 'High Fiber', 'High Protein'],
     imageEmoji: '🥣',
     nutritionPerServing: {
@@ -213,6 +248,7 @@ export const INITIAL_RECIPES: Recipe[] = [
     servings: 1,
     prepTime: '10 mins',
     cuisine: 'american',
+    category: 'meal',
     tags: ['Quick Lunch', 'Keto Friendly', 'No Cook'],
     imageEmoji: '🥗',
     nutritionPerServing: {
@@ -234,6 +270,188 @@ export const INITIAL_RECIPES: Recipe[] = [
       'Slice roasted turkey breast, ripe avocado, and cucumber.',
       'Assemble turkey and toppings over greens.',
       'Drizzle with balsamic vinaigrette and sprinkle pumpkin seeds for a crunchy finish.'
+    ]
+  },
+  {
+    id: 'recipe-7',
+    title: 'Roasted Masala Makhana & Cashews',
+    description: 'Crispy roasted foxnuts (lotus seeds) and whole cashews tossed in a touch of ghee, turmeric, chaat masala, and Himalayan pink salt.',
+    servings: 2,
+    prepTime: '10 mins',
+    cuisine: 'indian',
+    category: 'snack',
+    tags: ['Snack', 'Low Calorie', 'High Fiber', 'Crunchy'],
+    imageEmoji: '🍿',
+    nutritionPerServing: {
+      calories: 180,
+      protein: 5,
+      carbs: 22,
+      fats: 8,
+      fiber: 4
+    },
+    ingredients: [
+      { id: 'ing-32', name: 'Phool Makhana (Foxnuts)', quantity: '2 cups', store: 'indian', department: 'Pantry & Bulk' },
+      { id: 'ing-33', name: 'Kirkland Raw Whole Cashews', quantity: '1/4 cup', store: 'costco', department: 'Pantry & Bulk' },
+      { id: 'ing-34', name: 'Pure Desi Ghee', quantity: '1 tsp', store: 'indian', department: 'Pantry & Bulk' },
+      { id: 'ing-35', name: 'Chaat Masala & Roasted Cumin Powder', quantity: '1/2 tsp', store: 'indian', department: 'Spices & Lentils' },
+      { id: 'ing-36', name: 'Pink Himalayan Salt & Black Pepper', quantity: 'to taste', store: 'american', department: 'Spices & Lentils' }
+    ],
+    instructions: [
+      'Heat ghee in a wide heavy-bottom pan on low flame.',
+      'Add cashews and roast for 2 minutes until golden.',
+      'Add makhana and slow roast for 6-8 minutes, stirring constantly until crispy and brittle.',
+      'Sprinkle chaat masala, cumin powder, and salt while hot. Toss well and enjoy as a guilt-free afternoon crunch.'
+    ]
+  },
+  {
+    id: 'recipe-8',
+    title: 'Costco Chili-Lime Steamed Edamame',
+    description: 'Plump organic green edamame pods steamed fresh and sprinkled with coarse flaky sea salt, red chili flakes, and a squeeze of lime.',
+    servings: 2,
+    prepTime: '8 mins',
+    cuisine: 'costco-prep',
+    category: 'snack',
+    tags: ['Snack', 'High Protein', 'Plant Based', 'Quick'],
+    imageEmoji: '🫛',
+    nutritionPerServing: {
+      calories: 140,
+      protein: 14,
+      carbs: 11,
+      fats: 4,
+      fiber: 6
+    },
+    ingredients: [
+      { id: 'ing-37', name: 'Kirkland Organic Edamame Pods (Frozen)', quantity: '3 cups', store: 'costco', department: 'Frozen' },
+      { id: 'ing-38', name: 'Fresh Lime', quantity: '1 lime', store: 'american', department: 'Produce' },
+      { id: 'ing-39', name: 'Maldon Flaky Sea Salt & Red Chili Flakes', quantity: '1 tsp', store: 'american', department: 'Spices & Lentils' }
+    ],
+    instructions: [
+      'Bring 4 cups of salted water to a boil, or place frozen edamame pods in a microwave-safe steamer bowl.',
+      'Steam or boil for 4-5 minutes until tender-crisp and bright green.',
+      'Drain water thoroughly and transfer to a serving bowl.',
+      'Squeeze fresh lime juice all over and toss with flaky sea salt and crushed red pepper.'
+    ]
+  },
+  {
+    id: 'recipe-9',
+    title: 'Zesty Spiced Chickpea & Veggie Chaat',
+    description: 'Refreshing protein salad with tender boiled chickpeas, diced cucumbers, tomatoes, red onions, fresh mint, and tangy chaat seasoning.',
+    servings: 2,
+    prepTime: '12 mins',
+    cuisine: 'indian',
+    category: 'snack',
+    tags: ['Snack', 'High Fiber', 'Vegan', 'Veggies'],
+    imageEmoji: '🥗',
+    nutritionPerServing: {
+      calories: 210,
+      protein: 10,
+      carbs: 34,
+      fats: 4,
+      fiber: 8
+    },
+    ingredients: [
+      { id: 'ing-40', name: 'Boiled Kabuli Chana (Chickpeas)', quantity: '1.5 cups', store: 'indian', department: 'Spices & Lentils' },
+      { id: 'ing-41', name: 'English Cucumber', quantity: '1 medium', store: 'american', department: 'Produce' },
+      { id: 'ing-42', name: 'Roma Tomatoes & Red Onion', quantity: '1 each', store: 'american', department: 'Produce' },
+      { id: 'ing-43', name: 'Fresh Mint & Cilantro Leaves', quantity: '1/2 cup chopped', store: 'indian', department: 'Produce' },
+      { id: 'ing-44', name: 'Chaat Masala & Lemon Juice', quantity: '1 tbsp each', store: 'indian', department: 'Spices & Lentils' }
+    ],
+    instructions: [
+      'In a large mixing bowl, combine rinsed boiled chickpeas with diced cucumber, tomatoes, and red onions.',
+      'Add finely chopped fresh cilantro, mint leaves, and a pinch of roasted cumin powder.',
+      'Drizzle with fresh lemon juice and toss thoroughly with chaat masala.',
+      'Serve chilled or at room temperature as a refreshing midday power snack.'
+    ]
+  },
+  {
+    id: 'recipe-10',
+    title: 'Low-Calorie Almond Saffron Phirni (Kheer)',
+    description: 'Velvety royal Indian dessert made with finely ground almonds, unsweetened almond milk, crushed cardamom, and steeped saffron strands.',
+    servings: 3,
+    prepTime: '20 mins',
+    cuisine: 'indian',
+    category: 'dessert',
+    tags: ['Dessert', 'Low Sugar', 'Indian Sweet', 'Guilt-Free'],
+    imageEmoji: '🍮',
+    nutritionPerServing: {
+      calories: 160,
+      protein: 6,
+      carbs: 12,
+      fats: 10,
+      fiber: 3
+    },
+    ingredients: [
+      { id: 'ing-45', name: 'Whole Raw Almonds (Badam)', quantity: '1/2 cup', store: 'costco', department: 'Pantry & Bulk' },
+      { id: 'ing-46', name: 'Unsweetened Almond Milk', quantity: '2.5 cups', store: 'american', department: 'Dairy & Eggs' },
+      { id: 'ing-47', name: 'Kashmiri Kesar (Saffron Strands)', quantity: '10-12 strands', store: 'indian', department: 'Spices & Lentils' },
+      { id: 'ing-48', name: 'Green Cardamom (Elaichi) Pods', quantity: '4 pods crushed', store: 'indian', department: 'Spices & Lentils' },
+      { id: 'ing-49', name: 'Natural Stevia or Date Paste', quantity: '2 tbsp', store: 'american', department: 'Pantry & Bulk' }
+    ],
+    instructions: [
+      'Soak saffron threads in 2 tablespoons of warm almond milk for 10 minutes to release golden color.',
+      'Soak almonds in hot water, peel skins, and blend into a coarse creamy paste with 3 tbsp milk.',
+      'Simmer remaining almond milk in a saucepan with crushed cardamom for 8 minutes until slightly reduced.',
+      'Stir in the almond paste, saffron infusion, and sweetener. Cook on low flame for 6-8 minutes until thick.',
+      'Pour into earthen bowls, garnish with slivered pistachios, and chill before serving.'
+    ]
+  },
+  {
+    id: 'recipe-11',
+    title: 'High-Protein Mango Greek Yogurt Mousse',
+    description: 'Thick creamy Kirkland Greek yogurt blended with Alphonso mango puree and a touch of cardamom for an indulgent 18g-protein dessert.',
+    servings: 2,
+    prepTime: '10 mins',
+    cuisine: 'costco-prep',
+    category: 'dessert',
+    tags: ['Dessert', 'High Protein', 'Probiotic', 'No Cook'],
+    imageEmoji: '🥭',
+    nutritionPerServing: {
+      calories: 190,
+      protein: 18,
+      carbs: 24,
+      fats: 2,
+      fiber: 2
+    },
+    ingredients: [
+      { id: 'ing-50', name: 'Kirkland Plain Organic Greek Yogurt', quantity: '1.5 cups', store: 'costco', department: 'Dairy & Eggs' },
+      { id: 'ing-51', name: 'Alphonso Mango Pulp or Fresh Ripe Mango', quantity: '3/4 cup', store: 'indian', department: 'Pantry & Bulk' },
+      { id: 'ing-52', name: 'Cardamom Powder & Pistachio Sliver Garnish', quantity: '1/2 tsp', store: 'indian', department: 'Spices & Lentils' }
+    ],
+    instructions: [
+      'In a mixing bowl or food processor, whisk chilled Greek yogurt until silky and airy.',
+      'Gently fold in sweet mango puree and ground cardamom until beautifully marbled or homogenous.',
+      'Spoon into dessert glasses and chill in the freezer for 15 minutes for a soft-serve texture.',
+      'Garnish with sliced pistachios and fresh mint.'
+    ]
+  },
+  {
+    id: 'recipe-12',
+    title: 'Costco Dark Chocolate Berry Parfait',
+    description: 'Layers of rich Greek yogurt, antioxidant-loaded organic mixed berries, and shavings of 85% Belgian dark chocolate.',
+    servings: 1,
+    prepTime: '5 mins',
+    cuisine: 'costco-prep',
+    category: 'dessert',
+    tags: ['Dessert', 'Antioxidants', 'Low Sugar', 'Quick'],
+    imageEmoji: '🍨',
+    nutritionPerServing: {
+      calories: 220,
+      protein: 15,
+      carbs: 26,
+      fats: 6,
+      fiber: 5
+    },
+    ingredients: [
+      { id: 'ing-53', name: 'Kirkland Organic Greek Yogurt', quantity: '3/4 cup', store: 'costco', department: 'Dairy & Eggs' },
+      { id: 'ing-54', name: 'Fresh Raspberries & Blackberries', quantity: '1/2 cup', store: 'costco', department: 'Produce' },
+      { id: 'ing-55', name: '85% Extra Dark Chocolate Square', quantity: '1 square (grated)', store: 'costco', department: 'Pantry & Bulk' },
+      { id: 'ing-56', name: 'Pure Vanilla Extract & Raw Honey', quantity: '1/2 tsp each', store: 'american', department: 'Pantry & Bulk' }
+    ],
+    instructions: [
+      'Stir vanilla extract and a touch of honey into cold Greek yogurt.',
+      'Layer half the yogurt in a glass tumbler, followed by half the berries.',
+      'Add the remaining yogurt layer and top with berries.',
+      'Grate dark chocolate directly over top for a decadent yet macro-friendly treat.'
     ]
   }
 ];

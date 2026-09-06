@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "prod": "vite preview --port 5000 --host",
+    "preview": "vite preview --port 5000 --host"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",

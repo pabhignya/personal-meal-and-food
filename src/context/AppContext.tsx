@@ -9,14 +9,29 @@ import {
   DailyGoals,
   DailyRecord,
   StoreType,
-  RecipeIngredient
+  RecipeIngredient,
+  Nutrition,
+  MealType,
+  UserProfile,
+  BloodReport,
+  WeightEntry
 } from '../types';
 import {
   INITIAL_RECIPES,
   INITIAL_PANTRY,
   INITIAL_GROCERIES,
-  DEFAULT_DAILY_GOALS
+  DEFAULT_DAILY_GOALS,
+  DEFAULT_USER_PROFILE,
+  DEFAULT_BLOOD_REPORTS,
+  DEFAULT_WEIGHT_HISTORY
 } from '../data/defaultData';
+import { generateRecommendedGoals } from '../utils/healthCalculator';
+import {
+  loadInitialStateSync,
+  persistAppState,
+  loadFullPersistedState,
+  LOCAL_STORAGE_KEY
+} from '../utils/storageEngine';
 
 interface AppContextType extends AppState {
   activeTab: string;
@@ -25,11 +40,28 @@ interface AppContextType extends AppState {
   setSelectedDate: (date: string) => void;
   activeStoreFilter: StoreType | 'all';
   setActiveStoreFilter: (store: StoreType | 'all') => void;
+
+  // Profile, Health & Biomarkers
+  updateUserProfile: (profile: Partial<UserProfile>) => void;
+  applyRecommendedGoalsToDailyGoals: () => void;
+  addBloodReport: (report: Omit<BloodReport, 'id'>) => void;
+  updateBloodReport: (report: BloodReport) => void;
+  removeBloodReport: (id: string) => void;
+  logWeight: (weight: number, date?: string, notes?: string) => void;
+  removeWeightEntry: (id: string) => void;
   
   // Meal Planning
   addMealPlan: (plan: Omit<MealPlanItem, 'id' | 'isCooked'>) => void;
   removeMealPlan: (id: string) => void;
-  markMealCooked: (planId: string, deductPantry: boolean) => void;
+  markMealCooked: (
+    planId: string,
+    deductPantry: boolean,
+    eatenServings?: number,
+    scheduleLeftovers?: boolean,
+    customRatio?: number,
+    portionLabel?: string,
+    leftoverPortionsCount?: number
+  ) => void;
   unmarkMealCooked: (planId: string) => void;
 
   // Grocery
@@ -77,24 +109,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedDate, setSelectedDate] = useState<string>(getInitialDateString());
   const [activeStoreFilter, setActiveStoreFilter] = useState<StoreType | 'all'>('all');
 
-  // Load state from localStorage or initialize with defaults
+  // Load state from synchronous storage cache (or initialize with robust defaults)
   const [state, setState] = useState<AppState>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
+      const parsed = loadInitialStateSync();
+      if (parsed) {
         return {
-          recipes: parsed.recipes || INITIAL_RECIPES,
+          recipes: (parsed.recipes && parsed.recipes.length > 0) ? parsed.recipes : INITIAL_RECIPES,
           mealPlans: parsed.mealPlans || [],
           groceries: parsed.groceries || INITIAL_GROCERIES,
           pantry: parsed.pantry || INITIAL_PANTRY,
           nutritionLogs: parsed.nutritionLogs || [],
           dailyRecords: parsed.dailyRecords || {},
           dailyGoals: parsed.dailyGoals || DEFAULT_DAILY_GOALS,
+          userProfile: { ...DEFAULT_USER_PROFILE, ...(parsed.userProfile || {}) },
+          bloodReports: parsed.bloodReports
+            ? parsed.bloodReports.filter((r: any) => r.id !== 'report-demo-1')
+            : DEFAULT_BLOOD_REPORTS,
+          weightHistory: (parsed.weightHistory && parsed.weightHistory.length > 0) ? parsed.weightHistory : DEFAULT_WEIGHT_HISTORY,
         };
       }
     } catch (e) {
-      console.error('Error loading saved state:', e);
+      console.error('Error loading initial state:', e);
     }
     return {
       recipes: INITIAL_RECIPES,
@@ -104,16 +140,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       nutritionLogs: [],
       dailyRecords: {},
       dailyGoals: DEFAULT_DAILY_GOALS,
+      userProfile: DEFAULT_USER_PROFILE,
+      bloodReports: DEFAULT_BLOOD_REPORTS,
+      weightHistory: DEFAULT_WEIGHT_HISTORY,
     };
   });
 
-  // Save to localStorage on every state update
+  // Background hydration from IndexedDB on initial mount
+  // Restores full uncompressed documents (PDFs, images) and ensures complete data integrity
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (e) {
-      console.error('Error saving state to localStorage:', e);
-    }
+    loadFullPersistedState().then(persisted => {
+      if (persisted && typeof persisted === 'object') {
+        setState(current => {
+          const mergedReports = (persisted.bloodReports && persisted.bloodReports.length > 0)
+            ? persisted.bloodReports.filter((r: any) => r.id !== 'report-demo-1').map(pr => {
+                const existing = current.bloodReports.find(cr => cr.id === pr.id);
+                return existing ? { ...existing, fileData: pr.fileData || existing.fileData } : pr;
+              })
+            : current.bloodReports;
+
+          return {
+            ...current,
+            recipes: (persisted.recipes && persisted.recipes.length > 0) ? persisted.recipes : current.recipes,
+            mealPlans: (persisted.mealPlans && persisted.mealPlans.length > 0) ? persisted.mealPlans : current.mealPlans,
+            groceries: (persisted.groceries && persisted.groceries.length > 0) ? persisted.groceries : current.groceries,
+            pantry: (persisted.pantry && persisted.pantry.length > 0) ? persisted.pantry : current.pantry,
+            nutritionLogs: (persisted.nutritionLogs && persisted.nutritionLogs.length > 0) ? persisted.nutritionLogs : current.nutritionLogs,
+            dailyRecords: { ...current.dailyRecords, ...(persisted.dailyRecords || {}) },
+            userProfile: { ...current.userProfile, ...(persisted.userProfile || {}) },
+            bloodReports: mergedReports,
+            weightHistory: (persisted.weightHistory && persisted.weightHistory.length > 0) ? persisted.weightHistory : current.weightHistory,
+          };
+        });
+      }
+    });
+  }, []);
+
+  // Save to both IndexedDB and safe localStorage on every state update
+  useEffect(() => {
+    persistAppState(state);
   }, [state]);
 
   // --- Meal Planning Handlers ---
@@ -129,8 +194,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let updatedGroceries = [...state.groceries];
     const missingIngredients: RecipeIngredient[] = [];
 
-    if (newPlan.ingredients && newPlan.ingredients.length > 0) {
-      newPlan.ingredients.forEach(ing => {
+    const effectiveIngredients = (!newPlan.isLeftover && newPlan.ingredients && newPlan.ingredients.length > 0)
+      ? newPlan.ingredients.filter(ing => !(newPlan.excludedIngredientIds || []).includes(ing.id))
+      : [];
+
+    if (effectiveIngredients.length > 0) {
+      effectiveIngredients.forEach(ing => {
         const pantryMatch = state.pantry.find(p => 
           p.name.toLowerCase().includes(ing.name.toLowerCase()) || 
           ing.name.toLowerCase().includes(p.name.toLowerCase())
@@ -179,34 +248,105 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
-  const markMealCooked = (planId: string, deductPantry: boolean) => {
+  const markMealCooked = (
+    planId: string,
+    deductPantry: boolean,
+    eatenServings: number = 1,
+    scheduleLeftovers: boolean = false,
+    customRatio?: number,
+    portionLabel?: string,
+    leftoverPortionsCount?: number
+  ) => {
     const meal = state.mealPlans.find(p => p.id === planId);
     if (!meal) return;
 
     const now = new Date().toISOString();
     const todayStr = meal.date || getInitialDateString();
 
-    // Create nutrition log entry
+    const totalCookedServings = Math.max(1, meal.servings || 1);
+
+    // Determine ratio of batch eaten (either by weight customRatio e.g. 200g/800g = 0.25, or by servings)
+    const ratio = (customRatio && customRatio > 0 && customRatio <= 1)
+      ? customRatio
+      : (Math.max(1, Math.min(totalCookedServings, eatenServings)) / totalCookedServings);
+
+    // Nutrition consumed
+    const eatenNutrition: Nutrition = {
+      calories: Math.round(meal.nutrition.calories * ratio),
+      protein: Math.round(meal.nutrition.protein * ratio),
+      carbs: Math.round(meal.nutrition.carbs * ratio),
+      fats: Math.round(meal.nutrition.fats * ratio),
+      fiber: Math.round(meal.nutrition.fiber * ratio),
+    };
+
+    // Description label for the nutrition log
+    const label = portionLabel || (totalCookedServings > 1 ? `${eatenServings} of ${totalCookedServings} servings` : '');
+    const logTitle = label ? `${meal.customTitle || 'Meal'} (${label})` : (meal.customTitle || 'Meal');
+
+    // Create nutrition log entry for the portion eaten today
     const newLogEntry: NutritionLogEntry = {
       id: 'log-' + Date.now(),
       date: todayStr,
       mealPlanId: planId,
-      title: meal.customTitle || 'Meal',
+      title: logTitle,
       mealType: meal.mealType,
-      nutrition: meal.nutrition,
+      nutrition: eatenNutrition,
       timestamp: now
     };
 
-    // Optionally deduct pantry items
+    // Calculate remaining leftovers
+    const remainingRatio = Math.max(0, 1 - ratio);
+    const numLeftovers = leftoverPortionsCount !== undefined
+      ? leftoverPortionsCount
+      : Math.max(0, totalCookedServings - eatenServings);
+
+    const leftoverPlans: MealPlanItem[] = [];
+
+    if (scheduleLeftovers && remainingRatio > 0.05 && numLeftovers > 0) {
+      const perLeftoverRatio = remainingRatio / numLeftovers;
+      const perLeftoverNutrition: Nutrition = {
+        calories: Math.round(meal.nutrition.calories * perLeftoverRatio),
+        protein: Math.round(meal.nutrition.protein * perLeftoverRatio),
+        carbs: Math.round(meal.nutrition.carbs * perLeftoverRatio),
+        fats: Math.round(meal.nutrition.fats * perLeftoverRatio),
+        fiber: Math.round(meal.nutrition.fiber * perLeftoverRatio),
+      };
+
+      const baseDate = new Date(todayStr + 'T00:00:00');
+      for (let i = 0; i < numLeftovers; i++) {
+        const targetDate = new Date(baseDate);
+        const daysAhead = Math.floor(i / 2) + 1; // alternate: tomorrow lunch, tomorrow dinner, day after lunch...
+        targetDate.setDate(targetDate.getDate() + daysAhead);
+        const targetDateStr = targetDate.toISOString().split('T')[0];
+        const targetMealType: MealType = (i % 2 === 0) ? 'lunch' : 'dinner';
+
+        leftoverPlans.push({
+          id: 'plan-leftover-' + Date.now() + '-' + i,
+          date: targetDateStr,
+          mealType: targetMealType,
+          recipeId: meal.recipeId,
+          customTitle: `${meal.customTitle} (Leftover)`,
+          servings: 1,
+          nutrition: perLeftoverNutrition,
+          isCooked: false,
+          isLeftover: true,
+          ingredients: [] // already in fridge!
+        });
+      }
+    }
+
+    // Optionally deduct pantry items for the cooked batch (if not already a leftover)
     let updatedPantry = [...state.pantry];
-    if (deductPantry && meal.ingredients) {
-      meal.ingredients.forEach(ing => {
+    if (deductPantry && !meal.isLeftover && meal.ingredients) {
+      const activeIngredients = meal.ingredients.filter(
+        ing => !(meal.excludedIngredientIds || []).includes(ing.id)
+      );
+      activeIngredients.forEach(ing => {
         const pIndex = updatedPantry.findIndex(p => 
           p.name.toLowerCase().includes(ing.name.toLowerCase()) || 
           ing.name.toLowerCase().includes(p.name.toLowerCase())
         );
         if (pIndex !== -1) {
-          // If was in_stock, downgrade to low; if low, downgrade to out
           const current = updatedPantry[pIndex];
           const newStatus = current.status === 'in_stock' ? 'low' : 'out';
           updatedPantry[pIndex] = {
@@ -220,9 +360,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setState(prev => ({
       ...prev,
-      mealPlans: prev.mealPlans.map(p => 
-        p.id === planId ? { ...p, isCooked: true, cookedAt: now } : p
-      ),
+      mealPlans: [
+        ...prev.mealPlans.map(p => 
+          p.id === planId ? { ...p, isCooked: true, cookedAt: now } : p
+        ),
+        ...leftoverPlans
+      ],
       nutritionLogs: [...prev.nutritionLogs.filter(n => n.mealPlanId !== planId), newLogEntry],
       pantry: updatedPantry
     }));
@@ -441,6 +584,109 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
   };
 
+  // --- Profile, Health & Weight Handlers ---
+  const updateUserProfile = (updatedFields: Partial<UserProfile>) => {
+    setState(prev => {
+      const newProfile: UserProfile = { ...prev.userProfile, ...updatedFields };
+      const newGoals: DailyGoals = {
+        calories: newProfile.customTargetCalories !== undefined ? newProfile.customTargetCalories : prev.dailyGoals.calories,
+        protein: newProfile.customTargetProtein !== undefined ? newProfile.customTargetProtein : prev.dailyGoals.protein,
+        carbs: newProfile.customTargetCarbs !== undefined ? newProfile.customTargetCarbs : prev.dailyGoals.carbs,
+        fats: newProfile.customTargetFats !== undefined ? newProfile.customTargetFats : prev.dailyGoals.fats,
+        fiber: newProfile.customTargetFiber !== undefined ? newProfile.customTargetFiber : prev.dailyGoals.fiber,
+        water: newProfile.customTargetWater !== undefined ? newProfile.customTargetWater : prev.dailyGoals.water,
+      };
+
+      let newWeightHistory = prev.weightHistory;
+      if (updatedFields.weight !== undefined && updatedFields.weight !== prev.userProfile.weight) {
+        const todayStr = getInitialDateString();
+        const weightEntry: WeightEntry = {
+          id: 'w-' + Date.now(),
+          date: todayStr,
+          weight: updatedFields.weight,
+          notes: 'Profile weight update'
+        };
+        newWeightHistory = [weightEntry, ...prev.weightHistory.filter(w => w.date !== todayStr)];
+      }
+
+      return {
+        ...prev,
+        userProfile: newProfile,
+        dailyGoals: newGoals,
+        weightHistory: newWeightHistory
+      };
+    });
+  };
+
+  const applyRecommendedGoalsToDailyGoals = () => {
+    setState(prev => {
+      const rec = generateRecommendedGoals(prev.userProfile);
+      return {
+        ...prev,
+        dailyGoals: rec,
+        userProfile: {
+          ...prev.userProfile,
+          customTargetCalories: rec.calories,
+          customTargetProtein: rec.protein,
+          customTargetCarbs: rec.carbs,
+          customTargetFats: rec.fats,
+          customTargetFiber: rec.fiber,
+          customTargetWater: rec.water,
+        }
+      };
+    });
+  };
+
+  const addBloodReport = (reportData: Omit<BloodReport, 'id'>) => {
+    const newReport: BloodReport = {
+      ...reportData,
+      id: 'report-' + Date.now()
+    };
+    setState(prev => ({
+      ...prev,
+      bloodReports: [newReport, ...prev.bloodReports]
+    }));
+  };
+
+  const updateBloodReport = (report: BloodReport) => {
+    setState(prev => ({
+      ...prev,
+      bloodReports: prev.bloodReports.map(r => r.id === report.id ? report : r)
+    }));
+  };
+
+  const removeBloodReport = (id: string) => {
+    setState(prev => ({
+      ...prev,
+      bloodReports: prev.bloodReports.filter(r => r.id !== id)
+    }));
+  };
+
+  const logWeight = (weight: number, date?: string, notes?: string) => {
+    const entryDate = date || getInitialDateString();
+    const newEntry: WeightEntry = {
+      id: 'w-' + Date.now(),
+      date: entryDate,
+      weight,
+      notes
+    };
+    setState(prev => ({
+      ...prev,
+      userProfile: {
+        ...prev.userProfile,
+        weight
+      },
+      weightHistory: [newEntry, ...prev.weightHistory.filter(w => w.date !== entryDate)]
+    }));
+  };
+
+  const removeWeightEntry = (id: string) => {
+    setState(prev => ({
+      ...prev,
+      weightHistory: prev.weightHistory.filter(w => w.id !== id)
+    }));
+  };
+
   // --- Recipe Handlers ---
   const addRecipe = (recipeData: Omit<Recipe, 'id'>) => {
     const newRecipe: Recipe = {
@@ -481,16 +727,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const importDataJSON = (jsonString: string): boolean => {
     try {
       const parsed = JSON.parse(jsonString);
-      if (parsed.recipes && parsed.dailyGoals) {
-        setState({
-          recipes: parsed.recipes || INITIAL_RECIPES,
+      if (parsed && typeof parsed === 'object') {
+        const newState: AppState = {
+          recipes: (parsed.recipes && parsed.recipes.length > 0) ? parsed.recipes : INITIAL_RECIPES,
           mealPlans: parsed.mealPlans || [],
           groceries: parsed.groceries || [],
           pantry: parsed.pantry || [],
           nutritionLogs: parsed.nutritionLogs || [],
           dailyRecords: parsed.dailyRecords || {},
           dailyGoals: parsed.dailyGoals || DEFAULT_DAILY_GOALS,
-        });
+          userProfile: { ...DEFAULT_USER_PROFILE, ...(parsed.userProfile || {}) },
+          bloodReports: parsed.bloodReports
+            ? parsed.bloodReports.filter((r: any) => r.id !== 'report-demo-1')
+            : DEFAULT_BLOOD_REPORTS,
+          weightHistory: (parsed.weightHistory && parsed.weightHistory.length > 0) ? parsed.weightHistory : DEFAULT_WEIGHT_HISTORY,
+        };
+        setState(newState);
+        persistAppState(newState);
         return true;
       }
     } catch (e) {
@@ -508,6 +761,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       nutritionLogs: [],
       dailyRecords: {},
       dailyGoals: DEFAULT_DAILY_GOALS,
+      userProfile: DEFAULT_USER_PROFILE,
+      bloodReports: DEFAULT_BLOOD_REPORTS,
+      weightHistory: DEFAULT_WEIGHT_HISTORY,
     });
   };
 
@@ -539,6 +795,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         removeNutritionLog,
         updateWaterIntake,
         updateDailyGoals,
+        updateUserProfile,
+        applyRecommendedGoalsToDailyGoals,
+        addBloodReport,
+        updateBloodReport,
+        removeBloodReport,
+        logWeight,
+        removeWeightEntry,
         addRecipe,
         updateRecipe,
         deleteRecipe,

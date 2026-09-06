@@ -27,7 +27,9 @@ export const MealPlannerView: React.FC = () => {
     removeMealPlan,
     unmarkMealCooked,
     addMissingIngredientsToGrocery,
-    dailyGoals
+    dailyGoals,
+    userProfile,
+    updateUserProfile
   } = useApp();
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -75,8 +77,15 @@ export const MealPlannerView: React.FC = () => {
     { type: 'breakfast', label: 'Breakfast', icon: '🌅' },
     { type: 'lunch', label: 'Lunch', icon: '☀️' },
     { type: 'dinner', label: 'Dinner', icon: '🌙' },
-    { type: 'snack', label: 'Snacks', icon: '🍎' },
   ];
+
+  if (userProfile?.includeSnacksInPlanner !== false) {
+    mealSections.push({ type: 'snack', label: 'Snacks & Light Bites', icon: '🍎' });
+  }
+
+  if (userProfile?.includeDessertsInPlanner !== false) {
+    mealSections.push({ type: 'dessert', label: 'Desserts & Sweet Treats', icon: '🍨' });
+  }
 
   const handleOpenAddForSlot = (type: MealType) => {
     setActiveMealTypeForAdd(type);
@@ -85,8 +94,16 @@ export const MealPlannerView: React.FC = () => {
 
   const handleManualAddIngredients = (meal: MealPlanItem) => {
     if (!meal.ingredients || meal.ingredients.length === 0) return;
-    const addedCount = addMissingIngredientsToGrocery(meal.ingredients, meal.customTitle);
-    setFeedbackBanner(`Added ${addedCount} missing ingredients for ${meal.customTitle} to your grocery list!`);
+    const activeIngredients = meal.ingredients.filter(
+      i => !(meal.excludedIngredientIds || []).includes(i.id)
+    );
+    const addedCount = addMissingIngredientsToGrocery(activeIngredients, meal.customTitle);
+    const excludedCount = (meal.excludedIngredientIds || []).length;
+    setFeedbackBanner(
+      `Added ${addedCount} missing ingredients for ${meal.customTitle} to your grocery list` +
+      (excludedCount > 0 ? ` (${excludedCount} excluded veggies omitted)` : '') +
+      `!`
+    );
     setTimeout(() => setFeedbackBanner(null), 4000);
   };
 
@@ -104,32 +121,68 @@ export const MealPlannerView: React.FC = () => {
     <div className="space-y-6 pb-20 md:pb-8 max-w-5xl mx-auto">
       {/* Week Navigator */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2">
             <CalendarIcon className="w-5 h-5 text-emerald-600" />
             <h2 className="font-black text-slate-900 text-base sm:text-lg">Weekly Meal Calendar</h2>
           </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => navigateWeek('prev')}
-              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
-              title="Previous Week"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
-              className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
-            >
-              Today
-            </button>
-            <button
-              onClick={() => navigateWeek('next')}
-              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
-              title="Next Week"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Slot Visibility Toggles */}
+            <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-xl border border-slate-200">
+              <button
+                type="button"
+                onClick={() => updateUserProfile({ includeSnacksInPlanner: userProfile?.includeSnacksInPlanner === false ? true : false })}
+                className={`px-2 py-0.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1 ${
+                  userProfile?.includeSnacksInPlanner !== false
+                    ? 'bg-amber-100 text-amber-900 font-bold'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+                title="Toggle snack slots in planner"
+              >
+                <span>🍎</span>
+                <span className="hidden sm:inline">Snacks</span>
+                <span className="text-[10px]">{userProfile?.includeSnacksInPlanner !== false ? 'ON' : 'OFF'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => updateUserProfile({ includeDessertsInPlanner: userProfile?.includeDessertsInPlanner === false ? true : false })}
+                className={`px-2 py-0.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1 ${
+                  userProfile?.includeDessertsInPlanner !== false
+                    ? 'bg-pink-100 text-pink-900 font-bold'
+                    : 'text-slate-400 hover:text-slate-600'
+                }`}
+                title="Toggle dessert slots in planner"
+              >
+                <span>🍨</span>
+                <span className="hidden sm:inline">Desserts</span>
+                <span className="text-[10px]">{userProfile?.includeDessertsInPlanner !== false ? 'ON' : 'OFF'}</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => navigateWeek('prev')}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
+                title="Previous Week"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
+                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+              >
+                Today
+              </button>
+              <button
+                onClick={() => navigateWeek('next')}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
+                title="Next Week"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -275,7 +328,7 @@ export const MealPlannerView: React.FC = () => {
                     >
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex items-start gap-3">
-                          <span className="text-2xl mt-0.5">🥘</span>
+                          <span className="text-2xl mt-0.5">{meal.isLeftover ? '🧊' : '🥘'}</span>
                           <div>
                             <div className="flex items-center gap-2 flex-wrap">
                               <h5 className="font-bold text-sm sm:text-base text-slate-900">
@@ -284,10 +337,15 @@ export const MealPlannerView: React.FC = () => {
                               <span className="text-xs text-slate-500 font-medium">
                                 ({meal.servings} serving{meal.servings > 1 ? 's' : ''})
                               </span>
+                              {meal.isLeftover && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-100 text-cyan-800 border border-cyan-200">
+                                  🧊 Ready in Fridge
+                                </span>
+                              )}
                               {meal.isCooked && (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                                   <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                  Cooked & Logged to Calories
+                                  Eaten & Logged to Calories
                                 </span>
                               )}
                             </div>
@@ -313,25 +371,45 @@ export const MealPlannerView: React.FC = () => {
                               )}
                             </div>
 
-                            {/* Ingredients with Store Tags */}
-                            {meal.ingredients && meal.ingredients.length > 0 && (
-                              <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
-                                <span className="text-[11px] text-slate-400 font-medium">Ingredients:</span>
-                                {meal.ingredients.slice(0, 4).map(ing => {
-                                  const storeMeta = STORE_METADATA[ing.store];
-                                  return (
-                                    <span
-                                      key={ing.id}
-                                      className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${storeMeta.badgeClass}`}
-                                    >
-                                      {ing.name}
+                            {/* Ingredients with Store Tags and Exclusions */}
+                            {!meal.isLeftover && meal.ingredients && meal.ingredients.length > 0 && (
+                              <div className="mt-2.5 space-y-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[11px] text-slate-400 font-medium">Ingredients:</span>
+                                  {meal.ingredients
+                                    .filter(i => !(meal.excludedIngredientIds || []).includes(i.id))
+                                    .slice(0, 4)
+                                    .map(ing => {
+                                      const storeMeta = STORE_METADATA[ing.store];
+                                      return (
+                                        <span
+                                          key={ing.id}
+                                          className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${storeMeta.badgeClass}`}
+                                        >
+                                          {ing.name}
+                                        </span>
+                                      );
+                                    })}
+                                  {meal.ingredients.filter(i => !(meal.excludedIngredientIds || []).includes(i.id)).length > 4 && (
+                                    <span className="text-[10px] text-slate-400 font-medium">
+                                      +{meal.ingredients.filter(i => !(meal.excludedIngredientIds || []).includes(i.id)).length - 4} more
                                     </span>
-                                  );
-                                })}
-                                {meal.ingredients.length > 4 && (
-                                  <span className="text-[10px] text-slate-400 font-medium">
-                                    +{meal.ingredients.length - 4} more
-                                  </span>
+                                  )}
+                                </div>
+
+                                {/* Excluded Veggies / Ingredients Callout */}
+                                {(meal.excludedIngredientIds && meal.excludedIngredientIds.length > 0) && (
+                                  <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                                    <span className="text-[10px] text-rose-700 font-bold bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                      <span>🚫</span>
+                                      <span>Omitted: {
+                                        meal.ingredients
+                                          .filter(i => meal.excludedIngredientIds?.includes(i.id))
+                                          .map(i => i.name)
+                                          .join(', ') || `${meal.excludedIngredientIds.length} ingredients`
+                                      }</span>
+                                    </span>
+                                  </div>
                                 )}
                               </div>
                             )}
@@ -355,11 +433,11 @@ export const MealPlannerView: React.FC = () => {
                               className="text-xs sm:text-sm font-bold px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-1.5 transition-all active:scale-95"
                             >
                               <CheckCircle2 className="w-4 h-4" />
-                              <span>Mark Cooked</span>
+                              <span>{meal.isLeftover ? 'Eat Leftover' : 'Cook / Eat'}</span>
                             </button>
                           )}
 
-                          {meal.ingredients && meal.ingredients.length > 0 && (
+                          {!meal.isLeftover && meal.ingredients && meal.ingredients.length > 0 && (
                             <button
                               onClick={() => handleManualAddIngredients(meal)}
                               className="p-2 rounded-xl text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 border border-slate-200 transition-colors"

@@ -8,5 +8,9 @@ export default defineConfig({
   server: {
     port: 3000,
     host: true
+  },
+  preview: {
+    port: 5000,
+    host: true
   }
 });

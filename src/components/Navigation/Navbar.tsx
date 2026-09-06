@@ -8,7 +8,8 @@ import {
   Archive,
   Settings,
   Flame,
-  CheckCircle2
+  CheckCircle2,
+  HeartPulse
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -30,6 +31,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings }) => {
     { id: 'planner', label: 'Planner', icon: CalendarDays },
     { id: 'groceries', label: 'Groceries', icon: ShoppingCart, badge: pendingGroceriesCount },
     { id: 'nutrition', label: 'Calories', icon: Activity },
+    { id: 'health', label: 'Health', icon: HeartPulse },
     { id: 'recipes', label: 'Recipes', icon: BookOpen },
     { id: 'pantry', label: 'Pantry', icon: Archive },
   ];
@@ -49,6 +51,14 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings }) => {
                 <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">
                   PWA
                 </span>
+                {!import.meta.env.PROD && (
+                  <span
+                    className="text-[9px] uppercase font-extrabold tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 shadow-xs"
+                    title="Development Sandbox (Port 3000) - Edits happen here"
+                  >
+                    DEV
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 hidden sm:block">Plan • Store-Categorized Groceries • Calorie Tracking</p>
             </div>

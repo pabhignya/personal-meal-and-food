@@ -6,6 +6,7 @@ import { GroceryListView } from './components/Grocery/GroceryListView';
 import { NutritionTrackerView } from './components/Nutrition/NutritionTrackerView';
 import { RecipeBookView } from './components/Recipes/RecipeBookView';
 import { PantryView } from './components/Pantry/PantryView';
+import { ProfileHealthView } from './components/Profile/ProfileHealthView';
 import { SettingsModal } from './components/Settings/SettingsModal';
 
 export const AppContent: React.FC = () => {
@@ -36,6 +37,7 @@ export const AppContent: React.FC = () => {
         {activeTab === 'planner' && <MealPlannerView />}
         {activeTab === 'groceries' && <GroceryListView />}
         {activeTab === 'nutrition' && <NutritionTrackerView />}
+        {activeTab === 'health' && <ProfileHealthView />}
         {activeTab === 'recipes' && <RecipeBookView />}
         {activeTab === 'pantry' && <PantryView />}
       </main>

@@ -1,6 +1,6 @@
 export type StoreType = 'indian' | 'american' | 'costco' | 'other';
 
-export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'dessert';
 
 export type DepartmentType = 
   | 'Produce'
@@ -37,11 +37,13 @@ export interface Recipe {
   servings: number;
   prepTime: string;
   cuisine: 'indian' | 'american' | 'costco-prep' | 'custom';
+  category?: 'meal' | 'snack' | 'dessert';
   tags: string[];
   nutritionPerServing: Nutrition;
   ingredients: RecipeIngredient[];
   instructions: string[];
   imageEmoji: string;
+  defaultExcludedIngredientIds?: string[];
 }
 
 export interface MealPlanItem {
@@ -54,7 +56,9 @@ export interface MealPlanItem {
   nutrition: Nutrition; // total for the planned servings
   isCooked: boolean;
   cookedAt?: string;
+  isLeftover?: boolean;
   ingredients: RecipeIngredient[];
+  excludedIngredientIds?: string[];
 }
 
 export interface GroceryItem {
@@ -105,6 +109,66 @@ export interface DailyRecord {
   notes?: string;
 }
 
+export type Gender = 'male' | 'female' | 'other';
+export type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
+export type FitnessGoal = 'lose_weight' | 'maintain' | 'build_muscle';
+
+export interface UserProfile {
+  name: string;
+  dateOfBirth?: string; // YYYY-MM-DD
+  age: number;
+  weight: number; // in kg
+  weightUnit: 'kg' | 'lbs';
+  height: number; // in cm
+  heightUnit: 'cm' | 'ft_in';
+  gender: Gender;
+  activityLevel: ActivityLevel;
+  goal: FitnessGoal;
+  excludedVeggies?: string[];
+  includeSnacksInPlanner?: boolean;
+  includeDessertsInPlanner?: boolean;
+  customTargetCalories?: number;
+  customTargetProtein?: number;
+  customTargetCarbs?: number;
+  customTargetFats?: number;
+  customTargetFiber?: number;
+  customTargetWater?: number;
+}
+
+export interface Biomarker {
+  id: string;
+  name: string;
+  category: 'Metabolic / Glucose' | 'Lipid Panel' | 'Vitamins & Minerals' | 'Liver & Kidney' | 'Blood Count' | 'Other';
+  value: number;
+  unit: string;
+  minNormal: number;
+  maxNormal: number;
+  status: 'low' | 'normal' | 'high';
+  dietaryTip: string;
+}
+
+export interface BloodReport {
+  id: string;
+  date: string; // YYYY-MM-DD
+  title: string;
+  labName?: string;
+  fileName?: string;
+  fileData?: string; // base64 or data URL
+  fileType?: string;
+  notes?: string;
+  biomarkers?: Biomarker[];
+  overallSummary?: string;
+  recommendedFoods?: string[];
+  foodsToLimit?: string[];
+}
+
+export interface WeightEntry {
+  id: string;
+  date: string; // YYYY-MM-DD
+  weight: number; // in kg
+  notes?: string;
+}
+
 export interface AppState {
   recipes: Recipe[];
   mealPlans: MealPlanItem[];
@@ -113,4 +177,7 @@ export interface AppState {
   nutritionLogs: NutritionLogEntry[];
   dailyRecords: Record<string, DailyRecord>; // keyed by YYYY-MM-DD
   dailyGoals: DailyGoals;
+  userProfile: UserProfile;
+  bloodReports: BloodReport[];
+  weightHistory: WeightEntry[];
 }

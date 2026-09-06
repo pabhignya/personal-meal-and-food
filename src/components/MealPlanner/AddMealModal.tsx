@@ -18,14 +18,16 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
   defaultDate,
   defaultMealType = 'lunch'
 }) => {
-  const { recipes, addMealPlan } = useApp();
+  const { recipes, addMealPlan, userProfile } = useApp();
 
   const [mode, setMode] = useState<'recipe' | 'custom'>('recipe');
   const [date, setDate] = useState(defaultDate);
   const [mealType, setMealType] = useState<MealType>(defaultMealType);
   const [servings, setServings] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const [recipeCategoryFilter, setRecipeCategoryFilter] = useState<'all' | 'meal' | 'snack' | 'dessert'>('all');
   const [selectedRecipeId, setSelectedRecipeId] = useState<string>(recipes[0]?.id || '');
+  const [excludedIngredientIds, setExcludedIngredientIds] = useState<string[]>([]);
 
   // Custom meal fields
   const [customTitle, setCustomTitle] = useState('');
@@ -48,13 +50,56 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
 
   if (!isOpen) return null;
 
-  const filteredRecipes = recipes.filter(r => 
-    r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.cuisine.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
-  );
+  const filteredRecipes = recipes.filter(r => {
+    const matchesCategory =
+      recipeCategoryFilter === 'all' ? true :
+      recipeCategoryFilter === 'meal' ? (r.category === 'meal' || !r.category) :
+      recipeCategoryFilter === 'snack' ? (r.category === 'snack') :
+      recipeCategoryFilter === 'dessert' ? (r.category === 'dessert') :
+      true;
+    const matchesSearch =
+      r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      r.cuisine.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      r.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesCategory && matchesSearch;
+  });
 
   const selectedRecipe = recipes.find(r => r.id === selectedRecipeId);
+
+  const handleSelectRecipe = (r: Recipe) => {
+    setSelectedRecipeId(r.id);
+    if (r.category === 'snack') setMealType('snack');
+    else if (r.category === 'dessert') setMealType('dessert');
+
+    // Auto-exclude ingredients matching user's global excluded veggies
+    const userExclusions = userProfile?.excludedVeggies || [];
+    const autoEx: string[] = [];
+    r.ingredients.forEach(ing => {
+      const match = userExclusions.some(ev => {
+        const clean = ev.toLowerCase().split('(')[0].trim();
+        return ing.name.toLowerCase().includes(clean) || clean.includes(ing.name.toLowerCase());
+      });
+      if (match) autoEx.push(ing.id);
+    });
+    setExcludedIngredientIds(autoEx);
+  };
+
+  const toggleIngredientExcluded = (ingId: string) => {
+    setExcludedIngredientIds(prev =>
+      prev.includes(ingId) ? prev.filter(id => id !== ingId) : [...prev, ingId]
+    );
+  };
+
+  const handleToggleAllProduce = () => {
+    if (!selectedRecipe) return;
+    const produceIds = selectedRecipe.ingredients.filter(i => i.department === 'Produce').map(i => i.id);
+    const allExcluded = produceIds.length > 0 && produceIds.every(id => excludedIngredientIds.includes(id));
+    if (allExcluded) {
+      setExcludedIngredientIds(prev => prev.filter(id => !produceIds.includes(id)));
+    } else {
+      setExcludedIngredientIds(prev => Array.from(new Set([...prev, ...produceIds])));
+    }
+  };
 
   const handleAddCustomIngredient = () => {
     if (!customIngredientName.trim()) return;
@@ -97,7 +142,8 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
         customTitle: selectedRecipe.title,
         servings,
         nutrition: totalNutrition,
-        ingredients: selectedRecipe.ingredients
+        ingredients: selectedRecipe.ingredients,
+        excludedIngredientIds: excludedIngredientIds
       });
     } else if (mode === 'custom') {
       if (!customTitle.trim()) return;
@@ -188,12 +234,13 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
               <select
                 value={mealType}
                 onChange={(e) => setMealType(e.target.value as MealType)}
-                className="w-full text-xs sm:text-sm px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full text-xs sm:text-sm px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
               >
                 <option value="breakfast">Breakfast</option>
                 <option value="lunch">Lunch</option>
                 <option value="dinner">Dinner</option>
                 <option value="snack">Snack</option>
+                <option value="dessert">Dessert & Sweet Treat</option>
               </select>
             </div>
             <div>
@@ -222,26 +269,52 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
 
           {mode === 'recipe' ? (
             <div className="space-y-3">
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search recipes (e.g. Palak Paneer, Costco Chicken, Oats)..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full text-xs sm:text-sm pl-9 pr-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
+              {/* Search and Category Filter Pills */}
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search recipes (e.g. Palak Paneer, Costco Chicken, Makhana, Kheer)..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full text-xs sm:text-sm pl-9 pr-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                  {[
+                    { id: 'all', label: 'All Recipes', emoji: '🍱' },
+                    { id: 'meal', label: 'Main Meals', emoji: '🍛' },
+                    { id: 'snack', label: 'Snacks', emoji: '🍿' },
+                    { id: 'dessert', label: 'Desserts', emoji: '🍨' },
+                  ].map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setRecipeCategoryFilter(c.id as any)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                        recipeCategoryFilter === c.id
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      <span>{c.emoji}</span>
+                      <span>{c.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Recipe Cards List */}
-              <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+              <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
                 {filteredRecipes.map((recipe) => {
                   const isSelected = selectedRecipeId === recipe.id;
                   const store = STORE_METADATA[recipe.cuisine === 'costco-prep' ? 'costco' : recipe.cuisine === 'indian' ? 'indian' : 'american'];
                   return (
                     <div
                       key={recipe.id}
-                      onClick={() => setSelectedRecipeId(recipe.id)}
+                      onClick={() => handleSelectRecipe(recipe)}
                       className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start justify-between gap-2 ${
                         isSelected
                           ? 'border-emerald-500 bg-emerald-50/50 ring-1 ring-emerald-500'
@@ -268,11 +341,11 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${store.badgeClass}`}>
                               {store.shortName}
                             </span>
-                            {recipe.tags.slice(0, 2).map((t, i) => (
-                              <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
-                                {t}
+                            {recipe.category && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold">
+                                {recipe.category === 'snack' ? 'Snack' : recipe.category === 'dessert' ? 'Dessert' : 'Meal'}
                               </span>
-                            ))}
+                            )}
                           </div>
                         </div>
                       </div>
@@ -281,24 +354,69 @@ export const AddMealModal: React.FC<AddMealModalProps> = ({
                 })}
               </div>
 
+              {/* Selected Recipe Ingredients Customization & Veggie Exclusions */}
               {selectedRecipe && (
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
-                  <div className="font-bold text-slate-700 flex items-center justify-between">
-                    <span>Ingredients to check against pantry ({selectedRecipe.ingredients.length}):</span>
-                    <span className="text-emerald-700 font-semibold">
-                      Total: {selectedRecipe.nutritionPerServing.calories * servings} kcal
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {selectedRecipe.ingredients.map(ing => (
-                      <span
-                        key={ing.id}
-                        className="px-2 py-0.5 rounded text-[11px] bg-white border border-slate-200 text-slate-700 font-medium"
-                      >
-                        {ing.name} ({ing.quantity})
-                        <span className="text-slate-400 ml-1">[{STORE_METADATA[ing.store].shortName}]</span>
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-slate-800 flex items-center gap-1">
+                        <span>🥦</span>
+                        <span>Ingredients & Veggie Exclusions:</span>
                       </span>
-                    ))}
+                      {excludedIngredientIds.length > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-bold">
+                          {excludedIngredientIds.length} Excluded
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleToggleAllProduce}
+                        className="text-[11px] px-2 py-0.5 rounded-md bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold"
+                      >
+                        {selectedRecipe.ingredients.filter(i => i.department === 'Produce').every(i => excludedIngredientIds.includes(i.id))
+                          ? 'Restore Veggies'
+                          : 'Exclude Veggies'}
+                      </button>
+                      <span className="text-xs text-emerald-700 font-black">
+                        Total: {selectedRecipe.nutritionPerServing.calories * servings} kcal
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-slate-500">
+                    Click to exclude any veggies or items (excluded items will not be added to groceries or deducted from pantry):
+                  </p>
+
+                  <div className="flex flex-wrap gap-1.5 pt-1 max-h-32 overflow-y-auto">
+                    {selectedRecipe.ingredients.map(ing => {
+                      const isExcluded = excludedIngredientIds.includes(ing.id);
+                      const isProduce = ing.department === 'Produce';
+                      return (
+                        <button
+                          key={ing.id}
+                          type="button"
+                          onClick={() => toggleIngredientExcluded(ing.id)}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition-all ${
+                            isExcluded
+                              ? 'bg-rose-50 text-rose-800 border-rose-300 line-through opacity-70'
+                              : 'bg-white text-slate-800 border-slate-200 hover:border-slate-300'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={!isExcluded}
+                            onChange={() => {}}
+                            className="w-3.5 h-3.5 rounded text-emerald-600 border-slate-300 cursor-pointer pointer-events-none"
+                          />
+                          <span>{ing.name} ({ing.quantity})</span>
+                          {isProduce && <span className="text-[10px] text-emerald-600">🥬</span>}
+                          {isExcluded && <span className="text-[9px] font-bold text-rose-600">Omitted</span>}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
