@@ -9,15 +9,29 @@ import {
   Settings,
   Flame,
   CheckCircle2,
-  HeartPulse
+  HeartPulse,
+  Cloud
 } from 'lucide-react';
+import { AuthModal } from '../Auth/AuthModal';
 
 interface NavbarProps {
   onOpenSettings: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings }) => {
-  const { activeTab, setActiveTab, groceries, nutritionLogs, dailyGoals, selectedDate } = useApp();
+  const {
+    activeTab,
+    setActiveTab,
+    groceries,
+    nutritionLogs,
+    dailyGoals,
+    selectedDate,
+    currentUser,
+    syncStatus,
+    isSyncing,
+    isAuthModalOpen,
+    setIsAuthModalOpen
+  } = useApp();
 
   // Calculate unbought groceries count
   const pendingGroceriesCount = groceries.filter(g => !g.isBought).length;
@@ -64,29 +78,48 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings }) => {
             </div>
           </div>
 
-          {/* Calorie Pill & Settings */}
-          <div className="flex items-center gap-2.5">
+            {/* Cloud Sync Status / Login Button */}
             <button
-              onClick={() => setActiveTab('nutrition')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 transition-colors"
-              title="Daily Calorie Status"
+              onClick={() => setIsAuthModalOpen(true)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border text-xs font-semibold transition-colors ${
+                currentUser
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
+                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+              title={currentUser ? `Cloud Sync Active: ${currentUser.email}` : 'Sign in to sync phone & computer'}
             >
-              <Flame className="w-4 h-4 text-emerald-600 fill-emerald-500" />
-              <div className="text-xs font-semibold">
-                <span>{totalCaloriesToday}</span>
-                <span className="text-slate-400 font-normal"> / {dailyGoals.calories} kcal</span>
-              </div>
+              <Cloud className={`w-3.5 h-3.5 ${currentUser ? 'text-emerald-600' : 'text-slate-400'} ${isSyncing ? 'animate-bounce' : ''}`} />
+              <span className="hidden sm:inline">
+                {currentUser ? (isSyncing ? 'Syncing...' : 'Synced') : 'Sync'}
+              </span>
+              {currentUser && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse hidden sm:inline-block" />
+              )}
             </button>
 
-            <button
-              onClick={onOpenSettings}
-              className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
-              title="Settings & Backup"
-              aria-label="Settings"
-            >
-              <Settings className="w-5 h-5" />
-            </button>
-          </div>
+            {/* Calorie Pill & Settings */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActiveTab('nutrition')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 transition-colors"
+                title="Daily Calorie Status"
+              >
+                <Flame className="w-4 h-4 text-emerald-600 fill-emerald-500" />
+                <div className="text-xs font-semibold">
+                  <span>{totalCaloriesToday}</span>
+                  <span className="text-slate-400 font-normal"> / {dailyGoals.calories} kcal</span>
+                </div>
+              </button>
+
+              <button
+                onClick={onOpenSettings}
+                className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                title="Settings & Backup"
+                aria-label="Settings"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+            </div>
         </div>
 
         {/* Desktop Navigation Tabs */}
@@ -147,6 +180,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSettings }) => {
           })}
         </div>
       </nav>
+
+      {/* Cloud Sync & User Account Modal */}
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
     </>
   );
 };

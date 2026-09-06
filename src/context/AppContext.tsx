@@ -32,6 +32,14 @@ import {
   loadFullPersistedState,
   LOCAL_STORAGE_KEY
 } from '../utils/storageEngine';
+import {
+  subscribeToAuthState,
+  saveUserDataToCloud,
+  fetchUserDataFromCloud,
+  subscribeToCloudUserData,
+  isFirebaseConfigured
+} from '../services/firebase';
+import type { User } from 'firebase/auth';
 
 interface AppContextType extends AppState {
   activeTab: string;
@@ -40,6 +48,14 @@ interface AppContextType extends AppState {
   setSelectedDate: (date: string) => void;
   activeStoreFilter: StoreType | 'all';
   setActiveStoreFilter: (store: StoreType | 'all') => void;
+
+  // Cloud Sync & Auth
+  currentUser: User | null;
+  syncStatus: 'synced' | 'syncing' | 'offline' | 'unauthenticated';
+  isSyncing: boolean;
+  isAuthModalOpen: boolean;
+  setIsAuthModalOpen: (open: boolean) => void;
+  forceSyncCloud: () => Promise<void>;
 
   // Profile, Health & Biomarkers
   updateUserProfile: (profile: Partial<UserProfile>) => void;
@@ -176,10 +192,121 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, []);
 
+  // Auth & Cloud Sync State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'unauthenticated'>('unauthenticated');
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+
   // Save to both IndexedDB and safe localStorage on every state update
   useEffect(() => {
     persistAppState(state);
-  }, [state]);
+
+    if (currentUser) {
+      setSyncStatus('syncing');
+      const timer = setTimeout(async () => {
+        try {
+          await saveUserDataToCloud(currentUser.uid, state);
+          setSyncStatus('synced');
+        } catch {
+          setSyncStatus('offline');
+        }
+      }, 1000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [state, currentUser]);
+
+  // Listen to Firebase Auth state
+  useEffect(() => {
+    const unsubscribe = subscribeToAuthState(async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        setSyncStatus('syncing');
+        setIsSyncing(true);
+        try {
+          // Fetch cloud state
+          const cloudData = await fetchUserDataFromCloud(user.uid);
+          if (cloudData && typeof cloudData === 'object' && Object.keys(cloudData).length > 0) {
+            setState((prev) => ({
+              ...prev,
+              recipes: (cloudData.recipes && cloudData.recipes.length > 0) ? cloudData.recipes : prev.recipes,
+              mealPlans: cloudData.mealPlans || prev.mealPlans,
+              groceries: cloudData.groceries || prev.groceries,
+              pantry: cloudData.pantry || prev.pantry,
+              nutritionLogs: cloudData.nutritionLogs || prev.nutritionLogs,
+              dailyRecords: { ...prev.dailyRecords, ...(cloudData.dailyRecords || {}) },
+              dailyGoals: cloudData.dailyGoals || prev.dailyGoals,
+              userProfile: { ...prev.userProfile, ...(cloudData.userProfile || {}) },
+              bloodReports: cloudData.bloodReports || prev.bloodReports,
+              weightHistory: (cloudData.weightHistory && cloudData.weightHistory.length > 0) ? cloudData.weightHistory : prev.weightHistory,
+            }));
+            setSyncStatus('synced');
+          } else {
+            // First time login: upload local state so no local data is lost!
+            await saveUserDataToCloud(user.uid, state);
+            setSyncStatus('synced');
+          }
+        } catch (err) {
+          console.warn('[Sync] Auth login sync error:', err);
+          setSyncStatus('offline');
+        } finally {
+          setIsSyncing(false);
+        }
+      } else {
+        setSyncStatus('unauthenticated');
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Real-time listener for multi-device sync
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const unsubscribe = subscribeToCloudUserData(currentUser.uid, (cloudData) => {
+      if (cloudData && typeof cloudData === 'object') {
+        setState((prev) => ({
+          ...prev,
+          recipes: (cloudData.recipes && cloudData.recipes.length > 0) ? cloudData.recipes : prev.recipes,
+          mealPlans: cloudData.mealPlans || prev.mealPlans,
+          groceries: cloudData.groceries || prev.groceries,
+          pantry: cloudData.pantry || prev.pantry,
+          nutritionLogs: cloudData.nutritionLogs || prev.nutritionLogs,
+          dailyRecords: { ...prev.dailyRecords, ...(cloudData.dailyRecords || {}) },
+          dailyGoals: cloudData.dailyGoals || prev.dailyGoals,
+          userProfile: { ...prev.userProfile, ...(cloudData.userProfile || {}) },
+          bloodReports: cloudData.bloodReports || prev.bloodReports,
+          weightHistory: (cloudData.weightHistory && cloudData.weightHistory.length > 0) ? cloudData.weightHistory : prev.weightHistory,
+        }));
+        setSyncStatus('synced');
+      }
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  const forceSyncCloud = async () => {
+    if (!currentUser) return;
+    setIsSyncing(true);
+    setSyncStatus('syncing');
+    try {
+      await saveUserDataToCloud(currentUser.uid, state);
+      const cloudData = await fetchUserDataFromCloud(currentUser.uid);
+      if (cloudData) {
+        setState((prev) => ({
+          ...prev,
+          ...cloudData,
+        }));
+      }
+      setSyncStatus('synced');
+    } catch {
+      setSyncStatus('offline');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // --- Meal Planning Handlers ---
   const addMealPlan = (planData: Omit<MealPlanItem, 'id' | 'isCooked'>) => {
@@ -807,7 +934,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteRecipe,
         exportDataJSON,
         importDataJSON,
-        resetToDefaults
+        resetToDefaults,
+
+        // Cloud Sync & Auth
+        currentUser,
+        syncStatus,
+        isSyncing,
+        isAuthModalOpen,
+        setIsAuthModalOpen,
+        forceSyncCloud
       }}
     >
       {children}
