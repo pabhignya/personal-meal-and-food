@@ -282,6 +282,11 @@ export const ProfileHealthView: React.FC = () => {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 20 * 1024 * 1024) {
+        alert('File is larger than 20MB. Please upload a report document under 20MB.');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
       setReportFileName(file.name);
       setReportFileType(file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'));
       if (!reportTitle) {
@@ -352,22 +357,23 @@ export const ProfileHealthView: React.FC = () => {
     e.preventDefault();
     if (!reportTitle.trim()) return;
 
-    const newId = 'report-' + Date.now();
-    addBloodReport({
+    const newId = 'report-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6);
+    const createdId = addBloodReport({
+      id: newId,
       title: reportTitle.trim(),
       date: reportDate,
-      labName: reportLab.trim() || undefined,
-      notes: reportNotes.trim() || undefined,
-      fileName: reportFileName || undefined,
-      fileData: reportFileData || undefined,
-      fileType: reportFileType || (reportFileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : undefined),
+      labName: reportLab.trim(),
+      notes: reportNotes.trim(),
+      fileName: reportFileName || '',
+      fileData: reportFileData || '',
+      fileType: reportFileType || (reportFileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'),
       biomarkers: reportBiomarkers.filter(b => b.value > 0),
-      overallSummary: reportNotes.trim() || undefined,
+      overallSummary: reportNotes.trim(),
       recommendedFoods: [],
       foodsToLimit: [],
     });
 
-    setSelectedReportId(newId);
+    setSelectedReportId(createdId || newId);
     setIsReportModalOpen(false);
     setReportTitle('');
     setReportLab('');
@@ -377,6 +383,7 @@ export const ProfileHealthView: React.FC = () => {
     setReportFileType('');
     setReportBiomarkers([]);
     setShowBiomarkerEntry(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
     triggerSuccess('Lab report document saved successfully!');
   };
 
@@ -1356,6 +1363,10 @@ export const ProfileHealthView: React.FC = () => {
                             <span className="px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 text-[10px] font-bold shrink-0">
                               {isPdf ? 'PDF' : 'Image'}
                             </span>
+                          ) : rep.hasAttachment ? (
+                            <span className="px-1.5 py-0.5 rounded-md bg-rose-100 text-rose-800 text-[10px] font-bold shrink-0">
+                              Attached
+                            </span>
                           ) : (
                             <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-bold shrink-0">
                               Notes
@@ -1421,7 +1432,14 @@ export const ProfileHealthView: React.FC = () => {
                           </>
                         )}
                         <button
-                          onClick={() => removeBloodReport(currentBloodReport.id)}
+                          onClick={() => {
+                            if (window.confirm(`Delete lab report "${currentBloodReport.title}"?`)) {
+                              removeBloodReport(currentBloodReport.id);
+                              const remaining = bloodReports.filter(r => r.id !== currentBloodReport.id);
+                              setSelectedReportId(remaining.length > 0 ? remaining[0].id : null);
+                              triggerSuccess('Lab report deleted.');
+                            }
+                          }}
                           className="text-xs text-rose-600 hover:text-rose-800 p-2 rounded-xl hover:bg-rose-50 flex items-center gap-1 transition-colors"
                           title="Delete this report"
                         >
@@ -1548,8 +1566,14 @@ export const ProfileHealthView: React.FC = () => {
                     ) : (
                       <div className="p-6 bg-slate-50 rounded-xl border border-slate-200 text-center text-xs text-slate-500">
                         <FileText className="w-6 h-6 text-slate-400 mx-auto mb-1.5" />
-                        <span className="font-semibold text-slate-700 block">No Document Attached</span>
-                        <span>This report was logged with text notes. You can attach PDF or image files when uploading reports.</span>
+                        <span className="font-semibold text-slate-700 block">
+                          {currentBloodReport.hasAttachment ? 'Document Stored on Original Device' : 'No Document Attached'}
+                        </span>
+                        <span>
+                          {currentBloodReport.hasAttachment
+                            ? 'The original file attachment for this report is saved safely on the device where it was uploaded.'
+                            : 'This report was logged with text notes. You can attach PDF or image files when uploading reports.'}
+                        </span>
                       </div>
                     )}
                   </div>
