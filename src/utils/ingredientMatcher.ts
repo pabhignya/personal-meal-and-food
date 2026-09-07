@@ -37,10 +37,21 @@ export const CULINARY_EXCLUSION_GROUPS: ExclusionGroup[] = [
       'capsicums',
       'shimla mirch',
       'green bell pepper',
+      'green bell peppers',
       'red bell pepper',
+      'red bell peppers',
       'yellow bell pepper',
+      'yellow bell peppers',
+      'orange bell pepper',
+      'orange bell peppers',
       'sweet pepper',
       'sweet peppers',
+      'green pepper',
+      'green peppers',
+      'red pepper',
+      'red peppers',
+      'yellow pepper',
+      'yellow peppers',
       'banana pepper'
     ],
     // Essential negative guard: NEVER match black pepper, white pepper, peppercorns, or chili powder!
@@ -84,20 +95,20 @@ export const CULINARY_EXCLUSION_GROUPS: ExclusionGroup[] = [
       'kathirikai'
     ],
     // Negative guard: NEVER match regular eggs!
-    negatives: ['boiled egg', 'large eggs', 'egg whites', 'egg white']
+    negatives: ['boiled egg', 'large eggs', 'egg whites', 'egg white', 'egg', 'eggs']
   },
   {
     id: 'bitter_gourd',
     name: 'Bitter Gourd (Karela)',
-    triggers: ['bitter gourd', 'bitter melon', 'karela', 'karele', 'kakarakaya', 'pavakkai'],
-    matches: ['bitter gourd', 'bitter gourds', 'bitter melon', 'karela', 'karele', 'kakarakaya', 'pavakkai'],
+    triggers: ['bitter gourd', 'bitter gourds', 'bitter melon', 'bitter melons', 'karela', 'karele', 'kakarakaya', 'pavakkai'],
+    matches: ['bitter gourd', 'bitter gourds', 'bitter melon', 'bitter melons', 'karela', 'karele', 'kakarakaya', 'pavakkai'],
     negatives: []
   },
   {
     id: 'mushrooms',
     name: 'Mushrooms',
     triggers: ['mushroom', 'mushrooms', 'cremini', 'portobello', 'shiitake', 'button mushroom', 'khumb'],
-    matches: ['mushroom', 'mushrooms', 'cremini', 'portobello', 'shiitake', 'khumb', 'oyster mushroom', 'enoki'],
+    matches: ['mushroom', 'mushrooms', 'cremini', 'portobello', 'shiitake', 'khumb', 'oyster mushroom', 'enoki', 'button mushroom', 'button mushrooms'],
     negatives: []
   },
   {
@@ -118,7 +129,7 @@ export const CULINARY_EXCLUSION_GROUPS: ExclusionGroup[] = [
     id: 'cauliflower',
     name: 'Cauliflower (Gobi)',
     triggers: ['cauliflower', 'cauliflowers', 'phool gobi', 'phool gobhi', 'gobhi', 'gobi'],
-    matches: ['cauliflower', 'cauliflowers', 'phool gobi', 'phool gobhi', 'gobhi'],
+    matches: ['cauliflower', 'cauliflowers', 'phool gobi', 'phool gobhi', 'gobhi', 'gobi'],
     // Essential negative guard: NEVER match all-purpose flour, besan flour, or cabbage!
     negatives: [
       'patta gobi',
@@ -136,15 +147,15 @@ export const CULINARY_EXCLUSION_GROUPS: ExclusionGroup[] = [
   {
     id: 'bottle_gourd',
     name: 'Bottle Gourd (Lauki)',
-    triggers: ['bottle gourd', 'lauki', 'doodhi', 'dudhi', 'ghiya', 'sorakaya', 'sorakkai'],
-    matches: ['bottle gourd', 'lauki', 'doodhi', 'dudhi', 'ghiya', 'sorakaya', 'sorakkai'],
+    triggers: ['bottle gourd', 'bottle gourds', 'lauki', 'doodhi', 'dudhi', 'ghiya', 'sorakaya', 'sorakkai'],
+    matches: ['bottle gourd', 'bottle gourds', 'lauki', 'doodhi', 'dudhi', 'ghiya', 'sorakaya', 'sorakkai'],
     negatives: []
   },
   {
     id: 'radish',
     name: 'Radish (Mooli)',
     triggers: ['radish', 'radishes', 'mooli', 'muli', 'daikon', 'white radish'],
-    matches: ['radish', 'radishes', 'mooli', 'muli', 'daikon', 'white radish'],
+    matches: ['radish', 'radishes', 'mooli', 'muli', 'daikon', 'white radish', 'red radish', 'daikon radish'],
     negatives: ['horseradish']
   },
   {
@@ -300,36 +311,47 @@ export function isIngredientExcluded(ingredientName: string, userExclusions: str
     const normEx = normalizeName(rawEx);
     if (!normEx) continue;
 
-    // 1. Check if rawEx triggers any defined CULINARY_EXCLUSION_GROUPS
-    const activeGroups = CULINARY_EXCLUSION_GROUPS.filter(group =>
-      group.triggers.some(t => matchesWholeWordOrPhrase(normEx, t) || normEx === t)
-    );
+    // Extract subparts if user entered compound or delimited terms (e.g. "Zucchini / Squash")
+    const rawTokens = rawEx
+      .split(/[\/(),;\-]+/)
+      .map(t => normalizeName(t))
+      .filter(t => t.length > 1);
+    
+    // Always include full normEx as first token to test
+    const tokensToTest = rawTokens.length > 0 ? Array.from(new Set([normEx, ...rawTokens])) : [normEx];
 
-    if (activeGroups.length > 0) {
-      for (const group of activeGroups) {
-        // If ingredient contains a negative keyword, it cannot match this group
-        const hasNegative = (group.negatives || []).some(neg => matchesWholeWordOrPhrase(normIng, neg));
-        if (hasNegative) continue;
+    for (const token of tokensToTest) {
+      // 1. Check if token triggers any defined CULINARY_EXCLUSION_GROUPS
+      const activeGroups = CULINARY_EXCLUSION_GROUPS.filter(group =>
+        group.triggers.some(t => matchesWholeWordOrPhrase(token, t) || token === t)
+      );
 
-        const isMatch = group.matches.some(m => matchesWholeWordOrPhrase(normIng, m));
-        if (isMatch) return true;
-      }
-    } else {
-      // 2. Fallback for custom user exclusions: whole word matching + singular/plural variants
-      let variants = [normEx];
-      if (normEx.endsWith('ies') && normEx.length > 3) {
-        variants.push(normEx.slice(0, -3) + 'y');
-      } else if (normEx.endsWith('es') && normEx.length > 4) {
-        variants.push(normEx.slice(0, -2));
-      } else if (normEx.endsWith('s') && !normEx.endsWith('ss') && normEx.length > 3) {
-        variants.push(normEx.slice(0, -1));
+      if (activeGroups.length > 0) {
+        for (const group of activeGroups) {
+          // If ingredient contains a negative keyword, it cannot match this group
+          const hasNegative = (group.negatives || []).some(neg => matchesWholeWordOrPhrase(normIng, neg));
+          if (hasNegative) continue;
+
+          const isMatch = group.matches.some(m => matchesWholeWordOrPhrase(normIng, m));
+          if (isMatch) return true;
+        }
       } else {
-        variants.push(normEx + 's');
-      }
+        // 2. Fallback for custom user exclusions: whole word matching + singular/plural variants
+        let variants = [token];
+        if (token.endsWith('ies') && token.length > 3) {
+          variants.push(token.slice(0, -3) + 'y');
+        } else if (token.endsWith('es') && token.length > 4) {
+          variants.push(token.slice(0, -2));
+        } else if (token.endsWith('s') && !token.endsWith('ss') && token.length > 3) {
+          variants.push(token.slice(0, -1));
+        } else {
+          variants.push(token + 's');
+        }
 
-      for (const v of variants) {
-        if (matchesWholeWordOrPhrase(normIng, v)) {
-          return true;
+        for (const v of variants) {
+          if (matchesWholeWordOrPhrase(normIng, v)) {
+            return true;
+          }
         }
       }
     }

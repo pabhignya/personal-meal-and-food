@@ -467,10 +467,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateMealPlan = (plan: MealPlanItem) => {
-    setState(prev => ({
-      ...prev,
-      mealPlans: prev.mealPlans.map(p => p.id === plan.id ? plan : p)
-    }));
+    setState(prev => {
+      // Keep unbought groceries in sync for this meal plan when exclusions change
+      const excludedIds = plan.excludedIngredientIds || [];
+      const updatedGroceries = prev.groceries.filter(g => {
+        if (g.mealPlanId !== plan.id || g.isBought) return true;
+        const matchingIng = plan.ingredients?.find(i => 
+          i.name.toLowerCase() === g.name.toLowerCase() && i.store === g.store
+        );
+        if (matchingIng && excludedIds.includes(matchingIng.id)) {
+          return false; // Remove omitted ingredient from groceries
+        }
+        return true;
+      });
+
+      return {
+        ...prev,
+        mealPlans: prev.mealPlans.map(p => p.id === plan.id ? plan : p),
+        groceries: updatedGroceries
+      };
+    });
   };
 
   const removeMealPlan = (id: string) => {
@@ -573,9 +589,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let updatedPantry = [...state.pantry];
     if (deductPantry && !meal.isLeftover && meal.ingredients) {
       const userExclusions = state.userProfile?.excludedVeggies || [];
-      const activeIngredients = meal.ingredients.filter(
-        ing => !(meal.excludedIngredientIds || []).includes(ing.id) && !isIngredientExcluded(ing.name, userExclusions)
-      );
+      const activeIngredients = meal.ingredients.filter(ing => {
+        if (meal.excludedIngredientIds !== undefined) {
+          return !meal.excludedIngredientIds.includes(ing.id);
+        }
+        return !isIngredientExcluded(ing.name, userExclusions);
+      });
       activeIngredients.forEach(ing => {
         const pIndex = updatedPantry.findIndex(p => 
           p.name.toLowerCase().includes(ing.name.toLowerCase()) || 
